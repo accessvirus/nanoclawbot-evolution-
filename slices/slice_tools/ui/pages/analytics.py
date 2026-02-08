@@ -41,7 +41,7 @@ def render_analytics():
         # Daily executions
         daily = df.groupby(df["created_at"].dt.date).size().reset_index(name="count")
         fig = px.line(daily, x="created_at", y="count", title="Daily Tool Executions")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         # Success vs Failed
         status_counts = df.groupby(["created_at", "success"]).size().reset_index(name="count")
@@ -52,7 +52,7 @@ def render_analytics():
             color="success",
             title="Success vs Failed Executions"
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
     else:
         st.info("No execution data available yet.")
     
@@ -63,7 +63,7 @@ def render_analytics():
     if tool_usage:
         df = pd.DataFrame(tool_usage)
         fig3 = px.bar(df, x="tool_name", y="execution_count", title="Tool Usage")
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
     
     # Performance metrics
     st.subheader("Performance Metrics")
@@ -72,7 +72,7 @@ def render_analytics():
     if perf_data:
         df = pd.DataFrame(perf_data)
         fig4 = px.box(df, x="tool_name", y="execution_time", title="Execution Time by Tool")
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width='stretch')
         
         col_a, col_b = st.columns(2)
         with col_a:

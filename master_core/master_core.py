@@ -98,6 +98,33 @@ class MasterCore:
         self._running: bool = False
         self._start_time: Optional[datetime] = None
     
+    async def initialize(self) -> bool:
+        """Initialize all registered slices."""
+        try:
+            # Initialize all registered slices
+            for slice_id in self._slice_classes:
+                if slice_id not in self._slices:
+                    await self.initialize_slice(slice_id)
+            
+            self._running = True
+            self._start_time = datetime.utcnow()
+            
+            self.dashboard.publish_event(
+                orchestrator_id=self.orchestrator_id,
+                event_type="initialized",
+                description="MasterCore initialized"
+            )
+            
+            return True
+        except Exception as e:
+            self.dashboard.publish_alert(
+                orchestrator_id=self.orchestrator_id,
+                alert_type="error",
+                title="MasterCore initialization failed",
+                message=str(e)
+            )
+            return False
+    
     async def health_check(self) -> Dict[str, Any]:
         """Health check for master core."""
         return {

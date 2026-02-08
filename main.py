@@ -42,9 +42,12 @@ def main():
     
     if args.mode == "dashboard":
         print(f"Starting RefactorBot Master Dashboard on port {args.port}...")
-        import streamlit
-        sys.argv = ["streamlit", "run", "master_dashboard/app.py", "--server.port", str(args.port)]
-        streamlit.main()
+        import subprocess
+        subprocess.run([
+            sys.executable, "-m", "streamlit", "run",
+            "master_dashboard/app.py",
+            "--server.port", str(args.port)
+        ])
     
     elif args.mode == "slice":
         if not args.slice:
@@ -64,15 +67,12 @@ def main():
         slice_id = slice_map.get(args.slice, args.slice)
         print(f"Starting {slice_id} dashboard...")
         
-        import streamlit
-        sys.argv = [
-            "streamlit", 
-            "run", 
-            f"slices/{slice_id}/ui/pages/dashboard.py", 
-            "--server.port", 
-            str(args.port + 1)
-        ]
-        streamlit.main()
+        import subprocess
+        subprocess.run([
+            sys.executable, "-m", "streamlit", "run",
+            f"slices/{slice_id}/ui/pages/dashboard.py",
+            "--server.port", str(args.port + 1)
+        ])
 
 
 if __name__ == "__main__":

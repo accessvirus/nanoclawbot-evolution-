@@ -105,14 +105,14 @@ def render_sidebar():
                 "unhealthy": "🔴",
             }.get(state.get("health", "unknown"), "⚪")
             
-            if st.button(f"{status_emoji} {name}", use_container_width=True):
+            if st.button(f"{status_emoji} {name}", width='stretch'):
                 st.session_state.selected_slice = slice_id
                 st.session_state.page = "Slice Detail"
         
         st.markdown("---")
         
         # Refresh
-        if st.button("🔄 Refresh", use_container_width=True):
+        if st.button("🔄 Refresh", width='stretch'):
             st.rerun()
         
         st.markdown("---")
@@ -475,7 +475,7 @@ def render_logs_page():
             # Display
             st.dataframe(
                 filtered[["timestamp", "slice_id", "event_type", "description"]],
-                use_container_width=True
+                width='stretch'
             )
         else:
             st.info("No events logged yet.")
@@ -709,7 +709,7 @@ def render_master_chat_page():
                 payload = {}
                 st.error("Invalid JSON")
             
-            if st.button("🚀 Execute", use_container_width=True):
+            if st.button("🚀 Execute", width='stretch'):
                 st.info("Configure OPENROUTER_API_KEY for full execution")
                 st.json({"slice": slice_id, "operation": operation, "payload": payload, "status": "pending"})
     

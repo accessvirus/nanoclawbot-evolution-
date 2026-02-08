@@ -32,7 +32,7 @@ def render_analytics():
     if type_data:
         df = pd.DataFrame(list(type_data.items()), columns=["Type", "Count"])
         fig = px.pie(df, values="Count", names="Type", title="Memory Distribution")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     # Memory growth
     st.subheader("Memory Growth")
@@ -42,7 +42,7 @@ def render_analytics():
         df = pd.DataFrame(history)
         df["date"] = pd.to_datetime(df["date"])
         fig2 = px.line(df, x="date", y="count", title="Memory Growth Over Time")
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
     else:
         st.info("No historical data available.")
     
@@ -53,7 +53,7 @@ def render_analytics():
     if retrieval_data:
         df = pd.DataFrame(retrieval_data)
         fig3 = px.bar(df, x="query_type", y="count", title="Retrieval by Type")
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
     
     # Memory usage by user
     st.subheader("Top Users by Memory")
@@ -62,7 +62,7 @@ def render_analytics():
     if user_data:
         df = pd.DataFrame(user_data)
         fig4 = px.bar(df.head(10), x="user_id", y="memory_count", title="Memory Count by User")
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width='stretch')
     
     # Cleanup statistics
     st.subheader("Cleanup Statistics")
