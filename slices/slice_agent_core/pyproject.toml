@@ -1,0 +1,15 @@
+[project]
+name = "refactorbot-slice-agent-core"
+version = "2.0.0"
+description = "Agent Core Slice for RefactorBot"
+requires-python = ">=3.10"
+
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "aiosqlite>=0.19",
+    "streamlit>=1.28",
+]
+
+[tool.setuptools.packages.find]
+include = ["slice_agent_core*"]

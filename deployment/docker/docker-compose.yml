@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  refactorbot:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - SLICE_AGENT_CORE_DB=/app/data/slice_agent_core.db
+      - SLICE_TOOLS_DB=/app/data/slice_tools.db
+      - SLICE_MEMORY_DB=/app/data/slice_memory.db
+      - SLICE_COMMUNICATION_DB=/app/data/slice_communication.db
+      - SLICE_SESSION_DB=/app/data/slice_session.db
+      - SLICE_PROVIDERS_DB=/app/data/slice_providers.db
+      - SLICE_SKILLS_DB=/app/data/slice_skills.db
+      - SLICE_EVENT_BUS_DB=/app/data/slice_event_bus.db
+      - MASTER_DB=/app/data/master.db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Optional: Redis for caching (future)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
