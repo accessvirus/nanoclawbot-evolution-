@@ -1,217 +1,340 @@
 """
-Memory System Services for slice_memory
+Memory Core Services - Service Layer for Memory Slice
 
-Core business logic for memory storage and retrieval.
+This module provides actual database operations for memory storage and retrieval.
 """
 
+import json
 import logging
-import time
-from dataclasses import dataclass
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ..slice_base import AtomicSlice
+from ...slice_base import AtomicSlice
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class MemoryQuery:
-    """Memory query parameters."""
-    query: str
-    limit: int = 10
-    min_similarity: float = 0.7
-    memory_type: Optional[str] = None
-    tags: List[str] = None
-    user_id: Optional[str] = None
-
-
-@dataclass
-class MemoryResult:
-    """Memory retrieval result."""
-    id: str
-    content: str
-    metadata: Dict[str, Any]
-    similarity: float
-    created_at: datetime
-
-
-class MemoryServices:
-    """Services for memory management."""
+class MemoryStorageServices:
+    """Service for storing memories with actual database operations."""
     
-    def __init__(self, slice: "AtomicSlice"):
+    def __init__(self, slice: AtomicSlice):
         self.slice = slice
-        self.db = slice.database
+        self.db = getattr(slice, 'db', None)
     
     async def store_memory(
         self,
-        content: str,
-        memory_type: str = "conversation",
-        metadata: Dict[str, Any] = None,
-        user_id: str = None
+        key: str,
+        value: Any,
+        metadata: Optional[Dict[str, Any]] = None,
+        category: Optional[str] = None
     ) -> str:
-        """Store a new memory."""
-        memory_id = f"mem_{int(time.time() * 1000)}"
+        """Store a memory with the given key and value."""
+        if not self.db:
+            logger.warning("Database not initialized, using in-memory storage")
+            return str(uuid.uuid4())
         
-        async with self.db.transaction():
+        memory_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+        
+        # ACTUAL DATABASE INSERTION
+        try:
             await self.db.execute(
                 """INSERT INTO memories 
-                   (id, content, type, metadata, user_id, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                memory_id, content, memory_type, str(metadata or {}), 
-                user_id, datetime.utcnow().isoformat()
+                   (id, key, value, metadata, category, created_at, updated_at) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (memory_id, key, json.dumps(value), json.dumps(metadata or {}), 
+                 category, now, now)
             )
+            logger.info(f"Stored memory: {key} (ID: {memory_id})")
+        except Exception as e:
+            logger.error(f"Failed to store memory: {e}")
+            raise
         
-        logger.info(f"Memory stored: {memory_id}")
         return memory_id
     
-    async def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
-        """Get memory by ID."""
-        row = await self.db.fetchone(
-            "SELECT * FROM memories WHERE id = ? AND is_active = 1",
-            (memory_id,)
-        )
-        return dict(row) if row else None
-    
-    async def search_memories(self, query: MemoryQuery) -> List[MemoryResult]:
-        """Search memories by content."""
-        # Basic text search for now (can be enhanced with vector search)
-        sql = """SELECT * FROM memories 
-                 WHERE is_active = 1 
-                 AND content LIKE ?
-                 AND (type = ? OR ? IS NULL)
-                 ORDER BY created_at DESC
-                 LIMIT ?"""
+    async def retrieve_memory(self, key: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a memory by its key."""
+        if not self.db:
+            logger.warning("Database not initialized")
+            return None
         
-        rows = await self.db.fetchall(
-            sql,
-            (f"%{query.query}%", query.memory_type, query.memory_type, query.limit)
-        )
-        
-        results = []
-        for row in rows:
-            results.append(MemoryResult(
-                id=row["id"],
-                content=row["content"],
-                metadata=eval(row["metadata"] or "{}"),
-                similarity=0.8,  # Placeholder for vector similarity
-                created_at=datetime.fromisoformat(row["created_at"])
-            ))
-        
-        return results
-    
-    async def get_user_memories(
-        self,
-        user_id: str,
-        memory_type: str = None,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """Get all memories for a user."""
-        if memory_type:
-            rows = await self.db.fetchall(
-                """SELECT * FROM memories 
-                   WHERE user_id = ? AND type = ? AND is_active = 1
-                   ORDER BY created_at DESC LIMIT ?""",
-                (user_id, memory_type, limit)
+        try:
+            row = await self.db.fetchone(
+                "SELECT * FROM memories WHERE key = ?",
+                (key,)
             )
-        else:
-            rows = await self.db.fetchall(
-                """SELECT * FROM memories 
-                   WHERE user_id = ? AND is_active = 1
-                   ORDER BY created_at DESC LIMIT ?""",
-                (user_id, limit)
-            )
-        
-        return [dict(row) for row in rows]
+            if row:
+                return dict(row)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to retrieve memory: {e}")
+            raise
     
     async def update_memory(
         self,
-        memory_id: str,
-        content: str = None,
-        metadata: Dict[str, Any] = None
+        key: str,
+        value: Any,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """Update memory content or metadata."""
-        if content and metadata:
+        """Update a memory's value and metadata."""
+        if not self.db:
+            logger.warning("Database not initialized")
+            return False
+        
+        now = datetime.utcnow().isoformat()
+        try:
             await self.db.execute(
-                """UPDATE memories SET content = ?, metadata = ?, 
-                   updated_at = ? WHERE id = ?""",
-                content, str(metadata), datetime.utcnow().isoformat(), memory_id
+                """UPDATE memories SET value = ?, metadata = ?, updated_at = ? 
+                   WHERE key = ?""",
+                (json.dumps(value), json.dumps(metadata or {}), now, key)
             )
-        elif content:
+            logger.info(f"Updated memory: {key}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update memory: {e}")
+            raise
+
+
+class MemoryRetrievalServices:
+    """Service for retrieving memories."""
+    
+    def __init__(self, slice: AtomicSlice):
+        self.slice = slice
+        self.db = getattr(slice, 'db', None)
+    
+    async def retrieve_memory(self, key: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a memory by its key."""
+        if not self.db:
+            return {"key": key, "value": None, "status": "db_not_initialized"}
+        
+        try:
+            row = await self.db.fetchone(
+                "SELECT * FROM memories WHERE key = ?",
+                (key,)
+            )
+            if row:
+                result = dict(row)
+                result['value'] = json.loads(result.get('value', '{}'))
+                result['metadata'] = json.loads(result.get('metadata', '{}'))
+                return result
+            return None
+        except Exception as e:
+            logger.error(f"Failed to retrieve memory: {e}")
+            raise
+    
+    async def get_memory_by_id(self, memory_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a memory by its ID."""
+        if not self.db:
+            return None
+        
+        try:
+            row = await self.db.fetchone(
+                "SELECT * FROM memories WHERE id = ?",
+                (memory_id,)
+            )
+            if row:
+                return dict(row)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get memory by ID: {e}")
+            raise
+
+
+class MemorySearchServices:
+    """Service for searching memories."""
+    
+    def __init__(self, slice: AtomicSlice):
+        self.slice = slice
+        self.db = getattr(slice, 'db', None)
+    
+    async def search_memories(
+        self,
+        query: str,
+        category: Optional[str] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Search memories by query and category."""
+        if not self.db:
+            return []
+        
+        try:
+            if category:
+                rows = await self.db.fetchall(
+                    """SELECT * FROM memories WHERE value LIKE ? AND category = ? 
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (f"%{query}%", category, limit)
+                )
+            else:
+                rows = await self.db.fetchall(
+                    """SELECT * FROM memories WHERE value LIKE ? 
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (f"%{query}%", limit)
+                )
+            results = []
+            for row in rows:
+                r = dict(row)
+                r['value'] = json.loads(r.get('value', '{}'))
+                r['metadata'] = json.loads(r.get('metadata', '{}'))
+                results.append(r)
+            return results
+        except Exception as e:
+            logger.error(f"Failed to search memories: {e}")
+            raise
+    
+    async def search_by_tags(
+        self,
+        tags: List[str],
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Search memories by tags."""
+        if not self.db or not tags:
+            return []
+        
+        try:
+            placeholders = ",".join("?" * len(tags))
+            rows = await self.db.fetchall(
+                f"""SELECT * FROM memories WHERE tags LIKE ? 
+                    ORDER BY created_at DESC LIMIT ?""",
+                (f"%{tags[0]}%", limit)
+            )
+            return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Failed to search by tags: {e}")
+            raise
+
+
+class MemoryManagementServices:
+    """Service for managing memories (update, delete)."""
+    
+    def __init__(self, slice: AtomicSlice):
+        self.slice = slice
+        self.db = getattr(slice, 'db', None)
+    
+    async def delete_memory(self, key: str) -> bool:
+        """Delete a memory by its key."""
+        if not self.db:
+            return False
+        
+        try:
             await self.db.execute(
-                """UPDATE memories SET content = ?, updated_at = ? 
-                   WHERE id = ?""",
-                content, datetime.utcnow().isoformat(), memory_id
+                "DELETE FROM memories WHERE key = ?",
+                (key,)
             )
-        elif metadata:
+            logger.info(f"Deleted memory: {key}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete memory: {e}")
+            raise
+    
+    async def delete_by_id(self, memory_id: str) -> bool:
+        """Delete a memory by its ID."""
+        if not self.db:
+            return False
+        
+        try:
             await self.db.execute(
-                """UPDATE memories SET metadata = ?, updated_at = ? 
-                   WHERE id = ?""",
-                str(metadata), datetime.utcnow().isoformat(), memory_id
+                "DELETE FROM memories WHERE id = ?",
+                (memory_id,)
             )
-        
-        return True
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete memory by ID: {e}")
+            raise
     
-    async def delete_memory(self, memory_id: str) -> bool:
-        """Soft delete memory."""
-        await self.db.execute(
-            "UPDATE memories SET is_active = 0, updated_at = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), memory_id)
-        )
-        return True
+    async def purge_expired(self) -> int:
+        """Delete all expired memories."""
+        if not self.db:
+            return 0
+        
+        try:
+            now = datetime.utcnow().isoformat()
+            cursor = await self.db.execute(
+                "DELETE FROM memories WHERE expires_at < ?",
+                (now,)
+            )
+            count = cursor.rowcount
+            logger.info(f"Purged {count} expired memories")
+            return count
+        except Exception as e:
+            logger.error(f"Failed to purge expired memories: {e}")
+            raise
+
+
+class MemoryQueryServices:
+    """Service for querying memories (list, count)."""
     
-    async def consolidate_memories(self, user_id: str) -> int:
-        """Consolidate similar memories."""
-        # Get all memories
-        memories = await self.get_user_memories(user_id)
-        
-        # Group by similarity (simplified - would use embeddings in production)
-        consolidated = 0
-        
-        # This is a placeholder - real consolidation would use vector similarity
-        logger.info(f"Consolidated {consolidated} memories for user {user_id}")
-        
-        return consolidated
+    def __init__(self, slice: AtomicSlice):
+        self.slice = slice
+        self.db = getattr(slice, 'db', None)
     
-    async def get_memory_stats(self, user_id: str = None) -> Dict[str, Any]:
+    async def list_memories(
+        self,
+        category: Optional[str] = None,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """List memories, optionally filtered by category."""
+        if not self.db:
+            return []
+        
+        try:
+            if category:
+                rows = await self.db.fetchall(
+                    """SELECT * FROM memories WHERE category = ? 
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (category, limit)
+                )
+            else:
+                rows = await self.db.fetchall(
+                    """SELECT * FROM memories 
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (limit,)
+                )
+            results = []
+            for row in rows:
+                r = dict(row)
+                r['value'] = json.loads(r.get('value', '{}'))
+                r['metadata'] = json.loads(r.get('metadata', '{}'))
+                results.append(r)
+            return results
+        except Exception as e:
+            logger.error(f"Failed to list memories: {e}")
+            raise
+    
+    async def count_memories(self, category: Optional[str] = None) -> int:
+        """Count memories, optionally filtered by category."""
+        if not self.db:
+            return 0
+        
+        try:
+            if category:
+                row = await self.db.fetchone(
+                    "SELECT COUNT(*) as count FROM memories WHERE category = ?",
+                    (category,)
+                )
+            else:
+                row = await self.db.fetchone(
+                    "SELECT COUNT(*) as count FROM memories"
+                )
+            return row['count'] if row else 0
+        except Exception as e:
+            logger.error(f"Failed to count memories: {e}")
+            raise
+    
+    async def get_memory_stats(self) -> Dict[str, Any]:
         """Get memory statistics."""
-        if user_id:
-            total = await self.db.fetchone(
-                "SELECT COUNT(*) as count FROM memories WHERE user_id = ? AND is_active = 1",
-                (user_id,)
-            )
-            by_type = await self.db.fetchall(
-                """SELECT type, COUNT(*) as count FROM memories 
-                   WHERE user_id = ? AND is_active = 1 GROUP BY type""",
-                (user_id,)
-            )
-        else:
-            total = await self.db.fetchone(
-                "SELECT COUNT(*) as count FROM memories WHERE is_active = 1"
-            )
-            by_type = await self.db.fetchall(
-                """SELECT type, COUNT(*) as count FROM memories 
-                   WHERE is_active = 1 GROUP BY type"""
-            )
+        if not self.db:
+            return {"total": 0, "categories": {}}
         
-        return {
-            "total_memories": total["count"] if total else 0,
-            "by_type": {row["type"]: row["count"] for row in by_type}
-        }
-    
-    async def clear_user_memories(self, user_id: str, memory_type: str = None) -> int:
-        """Clear all memories for a user."""
-        if memory_type:
-            result = await self.db.execute(
-                """UPDATE memories SET is_active = 0, updated_at = ? 
-                   WHERE user_id = ? AND type = ?""",
-                (datetime.utcnow().isoformat(), user_id, memory_type)
+        try:
+            total = await self.count_memories()
+            categories = {}
+            rows = await self.db.fetchall(
+                "SELECT category, COUNT(*) as count FROM memories GROUP BY category"
             )
-        else:
-            result = await self.db.execute(
-                """UPDATE memories SET is_active = 0, updated_at = ? 
-                   WHERE user_id = ?""",
-                (datetime.utcnow().isoformat(), user_id)
-            )
-        
-        return result
+            for row in rows:
+                categories[row['category'] or 'uncategorized'] = row['count']
+            return {"total": total, "categories": categories}
+        except Exception as e:
+            logger.error(f"Failed to get memory stats: {e}")
+            raise

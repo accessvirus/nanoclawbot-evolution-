@@ -19,14 +19,14 @@ def main():
     parser.add_argument(
         "--slice",
         choices=[
-            "agent_core",
+            "agent",
             "tools",
             "memory",
             "communication",
             "session",
             "providers",
             "skills",
-            "event_bus"
+            "eventbus"
         ],
         help="Slice to run (required for slice mode)"
     )
@@ -51,14 +51,14 @@ def main():
             parser.error("--slice is required for slice mode")
         
         slice_map = {
-            "agent_core": "slice_agent_core",
+            "agent": "slice_agent",
             "tools": "slice_tools",
             "memory": "slice_memory",
             "communication": "slice_communication",
             "session": "slice_session",
             "providers": "slice_providers",
             "skills": "slice_skills",
-            "event_bus": "slice_event_bus",
+            "eventbus": "slice_eventbus",
         }
         
         slice_id = slice_map.get(args.slice, args.slice)

@@ -1,119 +1,206 @@
 """
-Tools Slice - Main implementation.
-"""
-from __future__ import annotations
+Tools Slice - Vertical Slice for Tool Management
 
+This slice handles tool registration and execution.
+"""
+
+import logging
 from typing import Any, Dict, Optional
 
-from pydantic_settings import BaseSettings
-
-from slices.slice_base import (
-    BaseSlice,
-    HealthStatus,
-    ImprovementFeedback,
-    ImprovementPlan,
-    LLMConfig,
-    SliceCapabilities,
-    SliceConfig,
-    SliceDatabase,
+from ..slice_base import (
+    AtomicSlice, 
+    SliceConfig, 
+    SliceContext, 
+    SliceRequest, 
     SliceResponse,
-    SliceStatus,
-    SliceMetrics,
+    SelfImprovementServices
 )
 
-
-class ToolsConfig(SliceConfig):
-    """Configuration for Tools Slice"""
-    slice_id: str = "slice_tools"
-    slice_name: str = "Tools"
-    slice_version: str = "2.0.0"
-    database_path: str = "data/slice_tools.db"
+logger = logging.getLogger(__name__)
 
 
-class ToolsSlice(BaseSlice):
-    """Tools Slice - Manages tool registry and execution."""
+class SliceTools(AtomicSlice):
+    """
+    Tools slice for managing agent tools.
     
-    slice_id: str = "slice_tools"
-    slice_name: str = "Tools"
-    slice_version: str = "2.0.0"
-    config_class = ToolsConfig
+    Responsibilities:
+    - Tool registration
+    - Tool execution
+    - Tool validation
+    """
     
-    def __init__(self, config: Optional[ToolsConfig] = None):
-        super().__init__(config)
-        self._database: Optional[SliceDatabase] = None
-        self._metrics = SliceMetrics(self.slice_id)
-        self._status = SliceStatus.INITIALIZING
-        self._llm_config = LLMConfig(
-            provider="openrouter",
-            model="openai/gpt-4-turbo"
-        )
+    # Protocol properties
+    @property
+    def slice_id(self) -> str:
+        return "slice_tools"
     
     @property
-    def database(self) -> SliceDatabase:
-        return self._database
+    def slice_name(self) -> str:
+        return "Tools Slice"
     
     @property
-    def llm_config(self) -> LLMConfig:
-        return self._llm_config
+    def slice_version(self) -> str:
+        return "1.0.0"
     
-    async def initialize(self) -> None:
-        """Initialize the slice"""
-        self._status = SliceStatus.READY
-        self._health = HealthStatus.HEALTHY
+    def __init__(self, config: Optional[SliceConfig] = None):
+        self._config = config or SliceConfig(slice_id="slice_tools")
+        self._services: Optional[Any] = None
+        self._current_request_id: str = ""
     
-    async def start(self) -> None:
-        self._status = SliceStatus.RUNNING
+    @property
+    def config(self) -> SliceConfig:
+        return self._config
     
-    async def stop(self) -> None:
-        self._status = SliceStatus.STOPPED
-    
-    async def shutdown(self) -> None:
-        await self.stop()
-    
-    async def execute(
-        self,
-        operation: str,
-        payload: Dict[str, Any],
-        context: Dict[str, Any] = {}
-    ) -> SliceResponse:
-        """Execute an operation"""
-        if operation == "list_tools":
-            return SliceResponse(
-                request_id="",
-                success=True,
-                payload={"tools": []}
-            )
+    async def _execute_core(self, request: SliceRequest) -> SliceResponse:
+        """Execute tool operation."""
+        self._current_request_id = request.request_id
+        operation = request.operation
+        
+        if operation == "register_tool":
+            return await self._register_tool(request.payload)
         elif operation == "execute_tool":
-            return SliceResponse(
-                request_id="",
-                success=True,
-                payload={"result": "Tool executed"}
+            return await self._execute_tool(request.payload)
+        elif operation == "list_tools":
+            return await self._list_tools(request.payload)
+        elif operation == "validate_tool":
+            return await self._validate_tool(request.payload)
+        elif operation == "delete_tool":
+            return await self._delete_tool(request.payload)
+        else:
+            return SliceResponse(request_id=request.request_id, success=False, payload={"error": f"Unknown operation: {operation}"})
+    
+    async def _register_tool(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Register a new tool."""
+        try:
+            from .core.services import ToolRegistrationServices
+            if self._services is None:
+                self._services = ToolRegistrationServices(self)
+            
+            tool_id = await self._services.register_tool(
+                name=payload.get("name", ""),
+                description=payload.get("description", ""),
+                parameters=payload.get("parameters", {})
             )
-        return SliceResponse(
-            request_id="",
-            success=False,
-            error_message=f"Unknown operation: {operation}"
-        )
+            
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=True,
+                payload={"tool_id": tool_id}
+            )
+        except Exception as e:
+            logger.error(f"Failed to register tool: {e}")
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=False,
+                payload={"error": str(e)}
+            )
     
-    async def get_capabilities(self) -> SliceCapabilities:
-        return SliceCapabilities(
-            capabilities=["tools.registry", "tools.execution"],
-            supported_operations=["list_tools", "execute_tool", "register_tool"]
-        )
+    async def _execute_tool(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Execute a tool."""
+        try:
+            from .core.services import ToolExecutionServices
+            if self._services is None:
+                self._services = ToolExecutionServices(self)
+            
+            result = await self._services.execute_tool(
+                tool_id=payload.get("tool_id", ""),
+                arguments=payload.get("arguments", {})
+            )
+            
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=True,
+                payload={"result": result}
+            )
+        except Exception as e:
+            logger.error(f"Failed to execute tool: {e}")
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=False,
+                payload={"error": str(e)}
+            )
     
-    async def health_check(self) -> HealthStatus:
-        return HealthStatus.HEALTHY
+    async def _list_tools(self, payload: Dict[str, Any]) -> SliceResponse:
+        """List all registered tools."""
+        try:
+            from .core.services import ToolQueryServices
+            if self._services is None:
+                self._services = ToolQueryServices(self)
+            
+            tools = await self._services.list_tools(category=payload.get("category"))
+            
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=True,
+                payload={"tools": tools}
+            )
+        except Exception as e:
+            logger.error(f"Failed to list tools: {e}")
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=False,
+                payload={"error": str(e)}
+            )
     
-    async def self_improve(self, feedback: ImprovementFeedback) -> ImprovementPlan:
-        return ImprovementPlan(
-            slice_id=self.slice_id,
-            improvements=[],
-            estimated_effort_hours=0
-        )
+    async def _validate_tool(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Validate a tool's parameters."""
+        try:
+            from .core.services import ToolValidationServices
+            if self._services is None:
+                self._services = ToolValidationServices(self)
+            
+            is_valid = await self._services.validate_tool(
+                tool_id=payload.get("tool_id", ""),
+                parameters=payload.get("parameters", {})
+            )
+            
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=True,
+                payload={"valid": is_valid}
+            )
+        except Exception as e:
+            logger.error(f"Failed to validate tool: {e}")
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=False,
+                payload={"error": str(e)}
+            )
     
-    async def run_self_diagnostics(self) -> Dict[str, Any]:
+    async def _delete_tool(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Delete a tool."""
+        try:
+            from .core.services import ToolManagementServices
+            if self._services is None:
+                self._services = ToolManagementServices(self)
+            
+            success = await self._services.delete_tool(tool_id=payload.get("tool_id", ""))
+            
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=success,
+                payload={"deleted": success}
+            )
+        except Exception as e:
+            logger.error(f"Failed to delete tool: {e}")
+            return SliceResponse(
+                request_id=self._current_request_id,
+                success=False,
+                payload={"error": str(e)}
+            )
+    
+    async def self_improve(self, feedback: Dict[str, Any]) -> Dict[str, Any]:
+        """Self-improvement for tools slice."""
+        improver = SelfImprovementServices(self)
+        improvements = await improver.analyze_and_improve(feedback)
         return {
-            "slice_id": self.slice_id,
-            "status": self._status.value,
-            "health": (await self.health_check()).value
+            "improvements": improvements,
+            "message": "Tools slice self-improvement complete"
+        }
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Health check for tools slice."""
+        return {
+            "status": "healthy",
+            "slice": self.slice_id
         }

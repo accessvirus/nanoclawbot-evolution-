@@ -263,15 +263,15 @@ def mock_openrouter_error() -> Dict[str, Any]:
 @pytest_asyncio.fixture
 async def mock_llm_provider():
     """Create mock LLM provider for testing."""
-    from providers.openrouter_gateway import OpenRouterGateway, LLMRequest
+    from providers.openrouter_gateway import OpenRouterGateway, OpenRouterConfig
     
     class MockProvider(OpenRouterGateway):
-        async def _make_request(self, request: LLMRequest) -> Dict[str, Any]:
+        async def complete(self, prompt: str, model: str = "openai/gpt-4-turbo", **kwargs) -> Dict[str, Any]:
             return {
                 "id": "mock-123",
                 "object": "chat.completion",
                 "created": datetime.utcnow().timestamp(),
-                "model": request.model,
+                "model": model,
                 "choices": [{
                     "index": 0,
                     "message": {"role": "assistant", "content": "Mock response"},
@@ -284,7 +284,8 @@ async def mock_llm_provider():
                 }
             }
     
-    provider = MockProvider(api_key="test-key")
+    config = OpenRouterConfig(api_key="test-key")
+    provider = MockProvider(config=config)
     return provider
 
 
@@ -306,10 +307,13 @@ def master_core_config() -> Dict[str, Any]:
 @pytest_asyncio.fixture
 async def master_core_instance(master_core_config):
     """Create Master Core instance for testing."""
-    from master_core.master_core import MasterCoreAI, MasterCoreConfig
+    from master_core.master_core import MasterCore
     
-    config = MasterCoreConfig(**master_core_config)
-    core = MasterCoreAI(config)
+    core = MasterCore(
+        data_dir=master_core_config.get("data_dir", "data"),
+        global_state_db=master_core_config.get("state_db_path", "data/master.db"),
+        openrouter_api_key=None
+    )
     await core.start()
     yield core
     await core.shutdown()

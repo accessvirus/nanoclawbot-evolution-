@@ -241,7 +241,11 @@ class OpenRouterGateway:
         completion_tokens: int
     ) -> float:
         """Calculate cost for a request"""
-        cost_info = asyncio.run(self.get_cost(model))
+        # Get cost from cache (synchronous)
+        cost_info = self._cost_cache.get(model)
+        if cost_info is None:
+            # Use default if not cached
+            cost_info = CostInfo()
         
         prompt_cost = (prompt_tokens / 1_000_000) * cost_info.prompt_cost_per_1m
         completion_cost = (completion_tokens / 1_000_000) * cost_info.completion_cost_per_1m

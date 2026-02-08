@@ -1,46 +1,14 @@
 """
-Slices package - Vertical slice modules for RefactorBot.
-
-Each slice is a self-contained module with:
-- Core business logic
-- SQLite database
-- LLM provider for self-awareness
-- Streamlit UI
+Slices Package - Vertical Slice Architecture for RefactorBot
 """
-from .slice_base import (
-    AtomicSlice,
-    BaseSlice,
-    SliceConfig,
-    SliceCapabilities,
-    SliceDatabase,
-    SliceRequest,
-    SliceResponse,
-    SliceStatus,
-    HealthStatus,
-    SliceMetrics,
-    SliceEvent,
-    SliceEventType,
-    LLMConfig,
-    LLMResponse,
-    ImprovementFeedback,
-    ImprovementPlan,
-)
+
+from .slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SliceContext, SelfImprovementServices
 
 __all__ = [
     "AtomicSlice",
-    "BaseSlice",
-    "SliceConfig",
-    "SliceCapabilities",
-    "SliceDatabase",
+    "SliceConfig", 
     "SliceRequest",
     "SliceResponse",
-    "SliceStatus",
-    "HealthStatus",
-    "SliceMetrics",
-    "SliceEvent",
-    "SliceEventType",
-    "LLMConfig",
-    "LLMResponse",
-    "ImprovementFeedback",
-    "ImprovementPlan",
+    "SliceContext",
+    "SelfImprovementServices"
 ]

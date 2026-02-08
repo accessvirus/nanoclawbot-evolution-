@@ -1,47 +1,156 @@
-"""Memory Slice - Main implementation."""
+"""
+Memory Slice - Vertical Slice for Memory Management
+
+This slice handles memory storage and retrieval.
+"""
+
+import logging
 from typing import Any, Dict, Optional
-from pydantic_settings import BaseSettings
-from slices.slice_base import BaseSlice, HealthStatus, ImprovementPlan, LLMConfig, SliceCapabilities, SliceConfig, SliceResponse, SliceStatus, SliceMetrics
 
-class MemoryConfig(SliceConfig):
-    slice_id: str = "slice_memory"
-    slice_name: str = "Memory"
-    slice_version: str = "2.0.0"
-    database_path: str = "data/slice_memory.db"
+from ..slice_base import (
+    AtomicSlice, 
+    SliceConfig, 
+    SliceRequest, 
+    SliceResponse,
+    SelfImprovementServices
+)
 
-class MemorySlice(BaseSlice):
-    slice_id: str = "slice_memory"
-    slice_name: str = "Memory"
-    slice_version: str = "2.0.0"
-    config_class = MemoryConfig
+logger = logging.getLogger(__name__)
+
+
+class SliceMemory(AtomicSlice):
+    """
+    Memory slice for persistent memory storage.
     
-    def __init__(self, config: Optional[MemoryConfig] = None):
-        super().__init__(config)
-        self._metrics = SliceMetrics(self.slice_id)
-        self._status = SliceStatus.INITIALIZING
-        self._llm_config = LLMConfig(provider="openrouter", model="openai/gpt-4-turbo")
+    Responsibilities:
+    - Memory storage
+    - Memory retrieval
+    - Memory search
+    """
     
     @property
-    def llm_config(self) -> LLMConfig: return self._llm_config
+    def slice_id(self) -> str:
+        return "slice_memory"
     
-    async def initialize(self) -> None:
-        self._status = SliceStatus.READY
-        self._health = HealthStatus.HEALTHY
+    @property
+    def slice_name(self) -> str:
+        return "Memory Slice"
     
-    async def start(self) -> None: self._status = SliceStatus.RUNNING
-    async def stop(self) -> None: self._status = SliceStatus.STOPPED
-    async def shutdown(self) -> None: await self.stop()
+    @property
+    def slice_version(self) -> str:
+        return "1.0.0"
     
-    async def execute(self, operation: str, payload: Dict[str, Any], context: Dict[str, Any] = {}) -> SliceResponse:
+    def __init__(self, config: Optional[SliceConfig] = None):
+        self._config = config or SliceConfig(slice_id="slice_memory")
+        self._services: Optional[Any] = None
+        self._current_request_id: str = ""
+    
+    @property
+    def config(self) -> SliceConfig:
+        return self._config
+    
+    async def _execute_core(self, request: SliceRequest) -> SliceResponse:
+        self._current_request_id = request.request_id
+        operation = request.operation
+        
         if operation == "store":
-            return SliceResponse(request_id="", success=True, payload={"stored": True})
+            return await self._store_memory(request.payload)
         elif operation == "retrieve":
-            return SliceResponse(request_id="", success=True, payload={"memories": []})
-        return SliceResponse(request_id="", success=False, error_message=f"Unknown: {operation}")
+            return await self._retrieve_memory(request.payload)
+        elif operation == "search":
+            return await self._search_memory(request.payload)
+        elif operation == "delete":
+            return await self._delete_memory(request.payload)
+        elif operation == "list":
+            return await self._list_memories(request.payload)
+        else:
+            return SliceResponse(request_id=request.request_id, success=False, payload={"error": f"Unknown operation: {operation}"})
     
-    async def get_capabilities(self) -> SliceCapabilities:
-        return SliceCapabilities(capabilities=["memory.store", "memory.retrieve"], supported_operations=["store", "retrieve", "search", "consolidate"])
+    async def _store_memory(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Store a new memory."""
+        try:
+            from .core.services import MemoryStorageServices
+            if self._services is None:
+                self._services = MemoryStorageServices(self)
+            
+            memory_id = await self._services.store_memory(
+                key=payload.get("key", ""),
+                value=payload.get("value", ""),
+                metadata=payload.get("metadata")
+            )
+            
+            return SliceResponse(request_id=self._current_request_id, success=True, payload={"memory_id": memory_id})
+        except Exception as e:
+            logger.error(f"Failed to store memory: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
     
-    async def health_check(self) -> HealthStatus: return HealthStatus.HEALTHY
-    async def self_improve(self, feedback: Any) -> ImprovementPlan: return ImprovementPlan(slice_id=self.slice_id, improvements=[], estimated_effort_hours=0)
-    async def run_self_diagnostics(self) -> Dict[str, Any]: return {"slice_id": self.slice_id, "status": self._status.value}
+    async def _retrieve_memory(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Retrieve a memory by key."""
+        try:
+            from .core.services import MemoryRetrievalServices
+            if self._services is None:
+                self._services = MemoryRetrievalServices(self)
+            
+            memory = await self._services.retrieve_memory(key=payload.get("key", ""))
+            return SliceResponse(request_id=self._current_request_id, success=True, payload=memory)
+        except Exception as e:
+            logger.error(f"Failed to retrieve memory: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def _search_memory(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Search memories by query."""
+        try:
+            from .core.services import MemorySearchServices
+            if self._services is None:
+                self._services = MemorySearchServices(self)
+            
+            results = await self._services.search_memories(
+                query=payload.get("query", ""),
+                limit=payload.get("limit", 10)
+            )
+            return SliceResponse(request_id=self._current_request_id, success=True, payload={"results": results})
+        except Exception as e:
+            logger.error(f"Failed to search memories: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def _delete_memory(self, payload: Dict[str, Any]) -> SliceResponse:
+        """Delete a memory by key."""
+        try:
+            from .core.services import MemoryManagementServices
+            if self._services is None:
+                self._services = MemoryManagementServices(self)
+            
+            success = await self._services.delete_memory(key=payload.get("key", ""))
+            return SliceResponse(request_id=self._current_request_id, success=success, payload={"deleted": success})
+        except Exception as e:
+            logger.error(f"Failed to delete memory: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def _list_memories(self, payload: Dict[str, Any]) -> SliceResponse:
+        """List all memories."""
+        try:
+            from .core.services import MemoryQueryServices
+            if self._services is None:
+                self._services = MemoryQueryServices(self)
+            
+            memories = await self._services.list_memories(limit=payload.get("limit", 100))
+            return SliceResponse(request_id=self._current_request_id, success=True, payload={"memories": memories})
+        except Exception as e:
+            logger.error(f"Failed to list memories: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def self_improve(self, feedback: Dict[str, Any]) -> Dict[str, Any]:
+        """Self-improvement for memory slice."""
+        improver = SelfImprovementServices(self)
+        improvements = await improver.analyze_and_improve(feedback)
+        return {
+            "improvements": improvements,
+            "message": "Memory slice self-improvement complete"
+        }
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Health check for memory slice."""
+        return {
+            "status": "healthy",
+            "slice": self.slice_id
+        }

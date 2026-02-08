@@ -276,22 +276,39 @@ class InputValidator:
     
     @classmethod
     def validate_path(cls, value: str) -> Tuple[bool, str]:
-        """Validate file path for path traversal."""
+        """Validate file path for path traversal and security."""
         if not value:
             return False, "Path is required"
         
-        # Check for path traversal
-        if ".." in value or value.startswith("/"):
-            return False, "Invalid path"
+        # Check for null bytes
+        if "\x00" in value:
+            return False, "Path contains null byte"
+        
+        # Check for path traversal (all variations)
+        normalized = value.replace("\\", "/")
+        if "../" in normalized or "/.." in normalized:
+            return False, "Path traversal not allowed"
+        
+        # Check for absolute paths (Unix)
+        if value.startswith("/"):
+            return False, "Absolute paths not allowed"
+        
+        # Check for drive letters (Windows)
+        if len(value) > 1 and value[1] == ":":
+            return False, "Drive letters not allowed"
         
         # Check for unsafe characters
         if not cls.SAFE_PATH_PATTERN.match(value):
             return False, "Path contains invalid characters"
         
-        # Check depth
-        depth = value.count("/")
+        # Check depth (combined separators)
+        depth = value.count("/") + value.count("\\")
         if depth > cls.MAX_DEPTH:
             return False, "Path too deep"
+        
+        # Check for null byte injection via encoded chars
+        if "%00" in value.lower():
+            return False, "Null byte injection detected"
         
         return True, ""
     
@@ -312,18 +329,8 @@ class InputValidator:
     @classmethod
     def sanitize_html(cls, value: str) -> str:
         """Sanitize HTML to prevent XSS."""
-        # Basic HTML entity escaping
-        replacements = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"'.encode('unicode_escape').decode(): "&quot;",
-            "'": "&#x27;",
-            "/": "&#x2F;"
-        }
-        for char, entity in replacements.items():
-            value = value.replace(char, entity)
-        return value
+        import html
+        return html.escape(value, quote=True)
     
     @classmethod
     def validate_json(cls, value: str) -> Tuple[bool, str, Any]:

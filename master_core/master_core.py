@@ -355,14 +355,14 @@ class MasterCore:
         """Determine which slices are needed for an operation"""
         # Simple routing based on operation prefix
         operation_map = {
-            "agent": ["slice_agent_core"],
+            "agent": ["slice_agent"],
             "tool": ["slice_tools"],
             "memory": ["slice_memory"],
             "comm": ["slice_communication", "slice_session"],
             "session": ["slice_session"],
             "provider": ["slice_providers"],
             "skill": ["slice_skills"],
-            "event": ["slice_event_bus"],
+            "event": ["slice_eventbus"],
         }
         
         for prefix, slices in operation_map.items():
@@ -370,7 +370,7 @@ class MasterCore:
                 return slices
         
         # Default to agent core
-        return ["slice_agent_core"]
+        return ["slice_agent"]
     
     # -------------------------------------------------------------------------
     # Status and Metrics

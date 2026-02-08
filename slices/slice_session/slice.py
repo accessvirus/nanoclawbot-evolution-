@@ -1,39 +1,119 @@
-"""Session Slice - Session management."""
-from slices.slice_base import BaseSlice, HealthStatus, ImprovementPlan, LLMConfig, SliceCapabilities, SliceConfig, SliceResponse, SliceStatus, SliceMetrics
+"""
+Session Slice - Vertical Slice for Session Management
+"""
 
-class SessionConfig(SliceConfig):
-    slice_id: str = "slice_session"
-    slice_name: str = "Session"
-    database_path: str = "data/slice_session.db"
+import logging
+from typing import Any, Dict, Optional
 
-class SessionSlice(BaseSlice):
-    slice_id: str = "slice_session"
-    slice_name: str = "Session"
-    config_class = SessionConfig
-    
-    def __init__(self, config=None):
-        super().__init__(config)
-        self._metrics = SliceMetrics(self.slice_id)
-        self._status = SliceStatus.INITIALIZING
-        self._llm_config = LLMConfig(provider="openrouter")
+from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SelfImprovementServices
+
+logger = logging.getLogger(__name__)
+
+
+class SliceSession(AtomicSlice):
+    @property
+    def slice_id(self) -> str:
+        return "slice_session"
     
     @property
-    def llm_config(self) -> LLMConfig: return self._llm_config
+    def slice_name(self) -> str:
+        return "Session Slice"
     
-    async def initialize(self) -> None:
-        self._status = SliceStatus.READY
-        self._health = HealthStatus.HEALTHY
+    @property
+    def slice_version(self) -> str:
+        return "1.0.0"
     
-    async def start(self) -> None: self._status = SliceStatus.RUNNING
-    async def stop(self) -> None: self._status = SliceStatus.STOPPED
-    async def shutdown(self) -> None: await self.stop()
+    def __init__(self, config: Optional[SliceConfig] = None):
+        self._config = config or SliceConfig(slice_id="slice_session")
+        self._services: Optional[Any] = None
+        self._current_request_id: str = ""
     
-    async def execute(self, operation: str, payload: dict, context: dict = {}) -> SliceResponse:
-        return SliceResponse(request_id="", success=True, payload={})
+    @property
+    def config(self) -> SliceConfig:
+        return self._config
     
-    async def get_capabilities(self) -> SliceCapabilities:
-        return SliceCapabilities(capabilities=["session.manage"], supported_operations=["create", "get", "list", "end"])
+    async def _execute_core(self, request: SliceRequest) -> SliceResponse:
+        self._current_request_id = request.request_id
+        operation = request.operation
+        
+        if operation == "create":
+            return await self._create_session(request.payload)
+        elif operation == "get":
+            return await self._get_session(request.payload)
+        elif operation == "update":
+            return await self._update_session(request.payload)
+        elif operation == "end":
+            return await self._end_session(request.payload)
+        elif operation == "list":
+            return await self._list_sessions(request.payload)
+        else:
+            return SliceResponse(request_id=request.request_id, success=False, payload={"error": f"Unknown operation: {operation}"})
     
-    async def health_check(self) -> HealthStatus: return HealthStatus.HEALTHY
-    async def self_improve(self, feedback: any) -> ImprovementPlan: return ImprovementPlan(slice_id=self.slice_id, improvements=[])
-    async def run_self_diagnostics(self) -> dict: return {"slice_id": self.slice_id, "status": self._status.value}
+    async def _create_session(self, payload: Dict[str, Any]) -> SliceResponse:
+        try:
+            from .core.services import SessionCreationServices
+            if self._services is None:
+                self._services = SessionCreationServices(self)
+            session_id = await self._services.create_session(
+                user_id=payload.get("user_id", ""),
+                metadata=payload.get("metadata")
+            )
+            return SliceResponse(request_id=self._current_request_id, success=True, payload={"session_id": session_id})
+        except Exception as e:
+            logger.error(f"Failed to create session: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def _get_session(self, payload: Dict[str, Any]) -> SliceResponse:
+        try:
+            from .core.services import SessionQueryServices
+            if self._services is None:
+                self._services = SessionQueryServices(self)
+            session = await self._services.get_session(session_id=payload.get("session_id", ""))
+            return SliceResponse(request_id=self._current_request_id, success=True, payload=session or {})
+        except Exception as e:
+            logger.error(f"Failed to get session: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def _update_session(self, payload: Dict[str, Any]) -> SliceResponse:
+        try:
+            from .core.services import SessionManagementServices
+            if self._services is None:
+                self._services = SessionManagementServices(self)
+            success = await self._services.update_session(
+                session_id=payload.get("session_id", ""),
+                data=payload.get("data", {})
+            )
+            return SliceResponse(request_id=self._current_request_id, success=success, payload={"updated": success})
+        except Exception as e:
+            logger.error(f"Failed to update session: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def _end_session(self, payload: Dict[str, Any]) -> SliceResponse:
+        try:
+            from .core.services import SessionManagementServices
+            if self._services is None:
+                self._services = SessionManagementServices(self)
+            success = await self._services.end_session(session_id=payload.get("session_id", ""))
+            return SliceResponse(request_id=self._current_request_id, success=success, payload={"ended": success})
+        except Exception as e:
+            logger.error(f"Failed to end session: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def _list_sessions(self, payload: Dict[str, Any]) -> SliceResponse:
+        try:
+            from .core.services import SessionQueryServices
+            if self._services is None:
+                self._services = SessionQueryServices(self)
+            sessions = await self._services.list_sessions(user_id=payload.get("user_id"))
+            return SliceResponse(request_id=self._current_request_id, success=True, payload={"sessions": sessions})
+        except Exception as e:
+            logger.error(f"Failed to list sessions: {e}")
+            return SliceResponse(request_id=self._current_request_id, success=False, payload={"error": str(e)})
+    
+    async def self_improve(self, feedback: Dict[str, Any]) -> Dict[str, Any]:
+        improver = SelfImprovementServices(self)
+        improvements = await improver.analyze_and_improve(feedback)
+        return {"improvements": improvements, "message": "Session slice self-improvement complete"}
+    
+    async def health_check(self) -> Dict[str, Any]:
+        return {"status": "healthy", "slice": self.slice_id}
