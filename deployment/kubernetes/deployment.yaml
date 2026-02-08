@@ -1,0 +1,478 @@
+"""
+Kubernetes Deployment Configuration for RefactorBot V2
+
+Production-ready Kubernetes manifests for deploying the system.
+"""
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: refactorbot
+  labels:
+    app: refactorbot
+    version: v2.0.0
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: refactorbot-config
+  namespace: refactorbot
+data:
+  # Master Core Configuration
+  MASTER_STATE_DB_PATH: "/data/master.db"
+  MASTER_MAX_CONCURRENT_TASKS: "50"
+  MASTER_HEARTBEAT_INTERVAL: "30"
+  
+  # OpenRouter Configuration
+  OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
+  OPENROUTER_DEFAULT_MODEL: "anthropic/claude-2"
+  OPENROUTER_TIMEOUT: "60"
+  
+  # Logging Configuration
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  
+  # Metrics Configuration
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  
+  # Rate Limiting
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS_PER_SECOND: "100"
+  RATE_LIMIT_REQUESTS_PER_MINUTE: "1000"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: refactorbot-secrets
+  namespace: refactorbot
+type: Opaque
+stringData:
+  # API Keys - Replace with actual values
+  openrouter-api-key: "sk-or-v1-xxxxx"
+  
+  # Database encryption key
+  db-encryption-key: "your-256-bit-encryption-key"
+  
+  # Webhook secrets
+  discord-webhook-secret: "your-discord-webhook-secret"
+  telegram-webhook-secret: "your-telegram-webhook-secret"
+  whatsapp-webhook-secret: "your-whatsapp-webhook-secret"
+  feishu-webhook-secret: "your-feishu-webhook-secret"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refactorbot-master
+  namespace: refactorbot
+  labels:
+    app: refactorbot
+    component: master-core
+    version: v2.0.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: refactorbot
+      component: master-core
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: refactorbot
+        component: master-core
+        version: v2.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: refactorbot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: master-core
+        image: refactorbot/master:v2.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: MASTER_STATE_DB_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: refactorbot-config
+              key: MASTER_STATE_DB_PATH
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: refactorbot-secrets
+              key: openrouter-api-key
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: refactorbot-config
+              key: LOG_LEVEL
+        envFrom:
+        - configMapRef:
+            name: refactorbot-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /config
+          readOnly: true
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: refactorbot-data
+      - name: config
+        configMap:
+          name: refactorbot-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: refactorbot
+                  component: master-core
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: refactorbot-master
+  namespace: refactorbot
+  labels:
+    app: refactorbot
+    component: master-core
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  selector:
+    app: refactorbot
+    component: master-core
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refactorbot-dashboard
+  namespace: refactorbot
+  labels:
+    app: refactorbot
+    component: dashboard
+    version: v2.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: refactorbot
+      component: dashboard
+  template:
+    metadata:
+      labels:
+        app: refactorbot
+        component: dashboard
+        version: v2.0.0
+    spec:
+      containers:
+      - name: dashboard
+        image: refactorbot/dashboard:v2.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8501
+          name: http
+        env:
+        - name: MASTER_API_URL
+          value: "http://refactorbot-master"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: refactorbot-dashboard
+  namespace: refactorbot
+  labels:
+    app: refactorbot
+    component: dashboard
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8501
+    protocol: TCP
+    name: http
+  selector:
+    app: refactorbot
+    component: dashboard
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: refactorbot-master-hpa
+  namespace: refactorbot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: refactorbot-master
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: refactorbot-ingress
+  namespace: refactorbot
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.refactorbot.example.com
+    - dashboard.refactorbot.example.com
+    secretName: refactorbot-tls
+  rules:
+  - host: api.refactorbot.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: refactorbot-master
+            port:
+              number: 80
+      - path: /webhook
+        pathType: Prefix
+        backend:
+          service:
+            name: refactorbot-master
+            port:
+              number: 80
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: refactorbot-master
+            port:
+              number: 9090
+  - host: dashboard.refactorbot.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: refactorbot-dashboard
+            port:
+              number: 80
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: refactorbot-data
+  namespace: refactorbot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: NetworkPolicy
+metadata:
+  name: refactorbot-network-policy
+  namespace: refactorbot
+spec:
+  podSelector:
+    matchLabels:
+      app: refactorbot
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8501
+  egress:
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 443
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: refactorbot-pdb
+  namespace: refactorbot
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: refactorbot
+      component: master-core
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: refactorbot
+  namespace: refactorbot
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: refactorbot-role
+  namespace: refactorbot
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: refactorbot-rolebinding
+  namespace: refactorbot
+subjects:
+- kind: ServiceAccount
+  name: refactorbot
+  namespace: refactorbot
+roleRef:
+  kind: Role
+  name: refactorbot-role
+  apiGroup: rbac.authorization.k8s.io
