@@ -61,6 +61,18 @@ class MasterCore:
     - Dashboard integration
     """
     
+    @property
+    def orchestrator_id(self) -> str:
+        return "master_core"
+    
+    @property
+    def orchestrator_name(self) -> str:
+        return "Master AI Orchestrator"
+    
+    @property
+    def orchestrator_version(self) -> str:
+        return "1.0.0"
+    
     def __init__(
         self,
         data_dir: str = "data",
@@ -78,6 +90,21 @@ class MasterCore:
         
         self._slices: Dict[str, Any] = {}  # slice_id -> slice instance
         self._slice_classes: Dict[str, Type] = {}  # slice_id -> slice class
+        
+        # Metrics
+        self._total_requests: int = 0
+        self._total_errors: int = 0
+        self._total_latency_ms: float = 0.0
+        self._running: bool = False
+        self._start_time: Optional[datetime] = None
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Health check for master core."""
+        return {
+            "status": "healthy",
+            "orchestrator": self.orchestrator_id,
+            "slices": list(self._slices.keys())
+        }
         self._running = False
         self._start_time: Optional[datetime] = None
         

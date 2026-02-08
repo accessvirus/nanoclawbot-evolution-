@@ -51,6 +51,10 @@ class SliceTools(AtomicSlice):
     def config(self) -> SliceConfig:
         return self._config
     
+    async def execute(self, request: SliceRequest) -> SliceResponse:
+        """Public execute method for slice."""
+        return await self._execute_core(request)
+    
     async def _execute_core(self, request: SliceRequest) -> SliceResponse:
         """Execute tool operation."""
         self._current_request_id = request.request_id

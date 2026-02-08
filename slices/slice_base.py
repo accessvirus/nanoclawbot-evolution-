@@ -74,7 +74,7 @@ T = TypeVar("T", bound="AtomicSlice")
 class SliceRequest(BaseModel):
     """Base request for slice execution"""
     request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    slice_id: str
+    slice_id: str = ""
     operation: str
     payload: Dict[str, Any] = Field(default_factory=dict)
     context: Dict[str, Any] = Field(default_factory=dict)

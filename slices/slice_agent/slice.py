@@ -49,6 +49,10 @@ class SliceAgent(AtomicSlice):
     def config(self) -> SliceConfig:
         return self._config
     
+    async def execute(self, request: SliceRequest) -> SliceResponse:
+        """Public execute method for slice."""
+        return await self._execute_core(request)
+    
     async def _execute_core(self, request: SliceRequest) -> SliceResponse:
         """Execute agent operation."""
         operation = request.operation

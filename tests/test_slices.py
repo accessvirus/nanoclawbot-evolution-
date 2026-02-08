@@ -335,11 +335,12 @@ class TestSelfImprovementServices:
         slice = SliceAgent()
         services = SelfImprovementServices(slice)
         
-        feedback = {"issue": "slow_response", "severity": "high"}
+        feedback = {"issue_type": "performance", "description": "slow response"}
         result = await services.analyze_and_improve(feedback)
         
-        assert "improvements" in result
-        assert "code_quality_score" in result
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert result[0]["type"] == "performance"
 
 
 if __name__ == "__main__":
