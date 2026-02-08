@@ -223,7 +223,7 @@ class AgentExecutionServices:
             # Make real LLM call
             llm_response = await gateway.complete(
                 prompt=input_text,
-                model=agent.get('model', 'openai/gpt-4-turbo'),
+                model=agent.get('model', 'z-ai/glm-4.5-air:free'),
                 system_prompt=system_prompt,
                 temperature=0.7,
                 max_tokens=4000
