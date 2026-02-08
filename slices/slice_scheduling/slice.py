@@ -404,9 +404,39 @@ class SliceScheduling(AtomicSlice):
     
     async def health_check(self) -> Dict[str, Any]:
         """Health check for scheduling slice."""
+        # Check database connection
+        db_connected = False
+        try:
+            if self._database and self._database._connection:
+                await self._database._connection.execute("SELECT 1")
+                db_connected = True
+        except Exception:
+            db_connected = False
+        
+        # Check scheduled tasks count
+        task_count = 0
+        try:
+            if db_connected:
+                result = await self._database.fetchone("SELECT COUNT(*) as count FROM scheduled_tasks")
+                task_count = result["count"] if result else 0
+        except Exception:
+            pass
+        
+        # Determine overall health
+        if db_connected and self._running:
+            status = "healthy"
+        elif self._running:
+            status = "degraded"
+        else:
+            status = "unhealthy"
+        
         return {
-            "status": "healthy",
+            "status": status,
             "slice": self.slice_id,
+            "version": self.slice_version,
+            "initialized": self._status != SliceStatus.INITIALIZING,
+            "database_connected": db_connected,
             "running": self._running,
-            "version": self.slice_version
+            "task_count": task_count,
+            "timestamp": datetime.utcnow().isoformat()
         }

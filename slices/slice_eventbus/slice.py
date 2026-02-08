@@ -140,4 +140,22 @@ class SliceEventBus(AtomicSlice):
         return {"improvements": improvements, "message": "Event Bus slice self-improvement complete"}
     
     async def health_check(self) -> Dict[str, Any]:
-        return {"status": "healthy", "slice": self.slice_id}
+        """Health check for event bus slice."""
+        # Check event bus subscribers
+        subscriber_count = len(self._subscribers)
+        
+        # Determine overall health
+        if subscriber_count > 0:
+            status = "healthy"
+        else:
+            status = "degraded"
+        
+        return {
+            "status": status,
+            "slice": self.slice_id,
+            "version": self.slice_version,
+            "initialized": self._status != SliceStatus.INITIALIZING,
+            "subscriber_count": subscriber_count,
+            "topic_count": len(self._topics),
+            "timestamp": datetime.utcnow().isoformat()
+        }

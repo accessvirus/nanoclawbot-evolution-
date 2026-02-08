@@ -144,4 +144,37 @@ class SliceSkills(AtomicSlice):
         return {"improvements": improvements, "message": "Skills slice self-improvement complete"}
     
     async def health_check(self) -> Dict[str, Any]:
-        return {"status": "healthy", "slice": self.slice_id}
+        """Health check for skills slice."""
+        # Check database connection
+        db_connected = False
+        try:
+            if self._database and self._database._connection:
+                await self._database._connection.execute("SELECT 1")
+                db_connected = True
+        except Exception:
+            db_connected = False
+        
+        # Check registered skills count
+        skills_count = 0
+        try:
+            if db_connected:
+                result = await self._database.fetchone("SELECT COUNT(*) as count FROM skills")
+                skills_count = result["count"] if result else 0
+        except Exception:
+            pass
+        
+        # Determine overall health
+        if db_connected:
+            status = "healthy"
+        else:
+            status = "degraded"
+        
+        return {
+            "status": status,
+            "slice": self.slice_id,
+            "version": self.slice_version,
+            "initialized": self._status != SliceStatus.INITIALIZING,
+            "database_connected": db_connected,
+            "skills_count": skills_count,
+            "timestamp": datetime.utcnow().isoformat()
+        }

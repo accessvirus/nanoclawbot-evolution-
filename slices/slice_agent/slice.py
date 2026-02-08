@@ -12,6 +12,8 @@ from ..slice_base import (
     SliceConfig, 
     SliceRequest, 
     SliceResponse,
+    SliceStatus,
+    HealthStatus,
     SelfImprovementServices
 )
 
@@ -48,6 +50,8 @@ class SliceAgent(AtomicSlice):
         self._query_service: Optional[Any] = None
         self._current_request_id: str = ""
         self._initialized: bool = False
+        self._status: SliceStatus = SliceStatus.INITIALIZING
+        self._health: HealthStatus = HealthStatus.UNHEALTHY
     
     @property
     def config(self) -> SliceConfig:
@@ -210,8 +214,101 @@ class SliceAgent(AtomicSlice):
     
     async def health_check(self) -> Dict[str, Any]:
         """Health check for agent core slice."""
+        # Check database connection
+        db_connected = False
+        try:
+            if self._database and self._database._connection:
+                await self._database._connection.execute("SELECT 1")
+                db_connected = True
+        except Exception:
+            db_connected = False
+        
+        # Determine overall health
+        if db_connected:
+            status = "healthy"
+        else:
+            status = "degraded"
+        
         return {
-            "status": "healthy",
+            "status": status,
             "slice": self.slice_id,
-            "version": self.slice_version
+            "version": self.slice_version,
+            "initialized": self._status != SliceStatus.INITIALIZING,
+            "database_connected": db_connected,
+            "timestamp": datetime.utcnow().isoformat()
         }
+    
+    async def run_self_diagnostics(self) -> Dict[str, Any]:
+        """Run comprehensive self-diagnostics for agent slice."""
+        diagnostics = {
+            "slice_id": self.slice_id,
+            "slice_name": self.slice_name,
+            "version": self.slice_version,
+            "status": self._status.value,
+            "health": self._health.value,
+            "initialized": self._initialized,
+            "checks": [],
+            "issues": [],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Check lifecycle service
+        if self._lifecycle_service:
+            diagnostics["checks"].append({
+                "name": "lifecycle_service",
+                "status": "passed",
+                "message": "Lifecycle service initialized"
+            })
+        else:
+            diagnostics["checks"].append({
+                "name": "lifecycle_service",
+                "status": "warning",
+                "message": "Lifecycle service not initialized"
+            })
+        
+        # Check execution service
+        if self._execution_service:
+            diagnostics["checks"].append({
+                "name": "execution_service",
+                "status": "passed",
+                "message": "Execution service initialized"
+            })
+        else:
+            diagnostics["checks"].append({
+                "name": "execution_service",
+                "status": "warning",
+                "message": "Execution service not initialized"
+            })
+        
+        # Check query service
+        if self._query_service:
+            diagnostics["checks"].append({
+                "name": "query_service",
+                "status": "passed",
+                "message": "Query service initialized"
+            })
+        else:
+            diagnostics["checks"].append({
+                "name": "query_service",
+                "status": "warning",
+                "message": "Query service not initialized"
+            })
+        
+        # Calculate overall health
+        failed_checks = [c for c in diagnostics["checks"] if c["status"] == "failed"]
+        if failed_checks:
+            diagnostics["overall_health"] = "unhealthy"
+        elif any(c["status"] == "warning" for c in diagnostics["checks"]):
+            diagnostics["overall_health"] = "degraded"
+        else:
+            diagnostics["overall_health"] = "healthy"
+        
+        # Summary
+        diagnostics["summary"] = {
+            "total_checks": len(diagnostics["checks"]),
+            "passed": len([c for c in diagnostics["checks"] if c["status"] == "passed"]),
+            "failed": len(failed_checks),
+            "warnings": len([c for c in diagnostics["checks"] if c["status"] == "warning"])
+        }
+        
+        return diagnostics

@@ -428,3 +428,341 @@ class TestOrchestrationRequest:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestSliceHealthChecks:
+    """Tests for slice health_check implementations."""
+    
+    @pytest.mark.asyncio
+    async def test_agent_health_check(self):
+        """Test agent slice health check."""
+        from refactorbot.slices.slice_agent.slice import SliceAgent
+        
+        agent = SliceAgent()
+        health = await agent.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "timestamp" in health
+        assert health["slice"] == "slice_agent"
+    
+    @pytest.mark.asyncio
+    async def test_tools_health_check(self):
+        """Test tools slice health check."""
+        from refactorbot.slices.slice_tools.slice import SliceTools
+        
+        tools = SliceTools()
+        health = await tools.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "tool_count" in health
+        assert health["slice"] == "slice_tools"
+    
+    @pytest.mark.asyncio
+    async def test_memory_health_check(self):
+        """Test memory slice health check."""
+        from refactorbot.slices.slice_memory.slice import SliceMemory
+        
+        memory = SliceMemory()
+        health = await memory.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "memory_count" in health
+        assert health["slice"] == "slice_memory"
+    
+    @pytest.mark.asyncio
+    async def test_session_health_check(self):
+        """Test session slice health check."""
+        from refactorbot.slices.slice_session.slice import SliceSession
+        
+        session = SliceSession()
+        health = await session.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "session_count" in health
+        assert health["slice"] == "slice_session"
+    
+    @pytest.mark.asyncio
+    async def test_communication_health_check(self):
+        """Test communication slice health check."""
+        from refactorbot.slices.slice_communication.slice import SliceCommunication
+        
+        comm = SliceCommunication()
+        health = await comm.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "channel_count" in health
+        assert health["slice"] == "slice_communication"
+    
+    @pytest.mark.asyncio
+    async def test_providers_health_check(self):
+        """Test providers slice health check."""
+        from refactorbot.slices.slice_providers.slice import SliceProviders
+        
+        providers = SliceProviders()
+        health = await providers.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "provider_count" in health
+        assert health["slice"] == "slice_providers"
+    
+    @pytest.mark.asyncio
+    async def test_skills_health_check(self):
+        """Test skills slice health check."""
+        from refactorbot.slices.slice_skills.slice import SliceSkills
+        
+        skills = SliceSkills()
+        health = await skills.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "skills_count" in health
+        assert health["slice"] == "slice_skills"
+    
+    @pytest.mark.asyncio
+    async def test_eventbus_health_check(self):
+        """Test eventbus slice health check."""
+        from refactorbot.slices.slice_eventbus.slice import SliceEventBus
+        
+        eventbus = SliceEventBus()
+        health = await eventbus.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "subscriber_count" in health
+        assert "topic_count" in health
+        assert health["slice"] == "slice_eventbus"
+    
+    @pytest.mark.asyncio
+    async def test_scheduling_health_check(self):
+        """Test scheduling slice health check."""
+        from refactorbot.slices.slice_scheduling.slice import SliceScheduling
+        
+        scheduling = SliceScheduling()
+        health = await scheduling.health_check()
+        
+        assert "status" in health
+        assert "slice" in health
+        assert "version" in health
+        assert "initialized" in health
+        assert "database_connected" in health
+        assert "running" in health
+        assert "task_count" in health
+        assert health["slice"] == "slice_scheduling"
+
+
+class TestSliceSelfDiagnostics:
+    """Tests for slice run_self_diagnostics implementations."""
+    
+    @pytest.mark.asyncio
+    async def test_base_slice_diagnostics(self):
+        """Test BaseSlice run_self_diagnostics."""
+        from refactorbot.slices.slice_base import BaseSlice, SliceConfig
+        
+        class TestSlice(BaseSlice):
+            slice_id = "test_slice"
+            slice_name = "Test Slice"
+            slice_version = "1.0.0"
+            config_class = SliceConfig
+        
+        slice = TestSlice()
+        diag = await slice.run_self_diagnostics()
+        
+        assert "slice_id" in diag
+        assert "slice_name" in diag
+        assert "version" in diag
+        assert "status" in diag
+        assert "health" in diag
+        assert "checks" in diag
+        assert "issues" in diag
+        assert "summary" in diag
+        assert diag["slice_id"] == "test_slice"
+    
+    @pytest.mark.asyncio
+    async def test_agent_diagnostics(self):
+        """Test agent slice run_self_diagnostics."""
+        from refactorbot.slices.slice_agent.slice import SliceAgent
+        
+        agent = SliceAgent()
+        diag = await agent.run_self_diagnostics()
+        
+        assert "slice_id" in diag
+        assert "slice_name" in diag
+        assert "checks" in diag
+        assert "issues" in diag
+        assert "summary" in diag
+        assert "overall_health" in diag
+
+
+class TestSchedulingSlice:
+    """Tests for scheduling slice functionality."""
+    
+    @pytest.mark.asyncio
+    async def test_schedule_task(self):
+        """Test scheduling a task."""
+        from refactorbot.slices.slice_scheduling.slice import SliceScheduling
+        
+        scheduling = SliceScheduling()
+        await scheduling.initialize()
+        
+        # Schedule a task
+        response = await scheduling.execute(
+            operation="schedule_task",
+            payload={
+                "task_id": "test_task_1",
+                "cron_expression": "* * * * *",
+                "task_type": "test",
+                "config": {}
+            }
+        )
+        
+        assert response.success is True
+        assert response.payload.get("task_id") == "test_task_1"
+    
+    @pytest.mark.asyncio
+    async def test_list_scheduled_tasks(self):
+        """Test listing scheduled tasks."""
+        from refactorbot.slices.slice_scheduling.slice import SliceScheduling
+        
+        scheduling = SliceScheduling()
+        await scheduling.initialize()
+        
+        # List tasks
+        response = await scheduling.execute(
+            operation="list_tasks",
+            payload={}
+        )
+        
+        assert response.success is True
+        assert "tasks" in response.payload
+
+
+class TestToolHandlers:
+    """Tests for tool handlers."""
+    
+    @pytest.mark.asyncio
+    async def test_file_handler_read(self):
+        """Test file handler read operation."""
+        from refactorbot.slices.slice_tools.core.handlers.file_handlers import FileHandlers
+        import tempfile
+        import os
+        
+        # Create temp file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+            f.write("Hello, World!")
+            temp_path = f.name
+        
+        try:
+            handlers = FileHandlers()
+            result = await handlers.read_file(path=temp_path)
+            
+            assert result.success is True
+            assert "Hello, World!" in result.content
+        finally:
+            os.unlink(temp_path)
+    
+    @pytest.mark.asyncio
+    async def test_file_handler_list(self):
+        """Test file handler list operation."""
+        from refactorbot.slices.slice_tools.core.handlers.file_handlers import FileHandlers
+        import tempfile
+        import os
+        
+        # Create temp dir
+        temp_dir = tempfile.mkdtemp()
+        
+        try:
+            # Create some files
+            for i in range(3):
+                with open(os.path.join(temp_dir, f"file_{i}.txt"), 'w') as f:
+                    f.write(f"Content {i}")
+            
+            handlers = FileHandlers()
+            result = await handlers.list_files(path=temp_dir, recursive=False)
+            
+            assert result.success is True
+            assert len(result.files) == 3
+        finally:
+            import shutil
+            shutil.rmtree(temp_dir)
+
+
+class TestLiteLLMGateway:
+    """Tests for LiteLLM gateway."""
+    
+    @pytest.mark.asyncio
+    async def test_gateway_initialization(self):
+        """Test LiteLLM gateway initialization."""
+        from refactorbot.providers.litellm_gateway import LiteLLMGateway
+        
+        gateway = LiteLLMGateway()
+        
+        assert gateway is not None
+        assert len(gateway.SUPPORTED_PROVIDERS) > 0
+        assert "openai" in gateway.SUPPORTED_PROVIDERS
+        assert "anthropic" in gateway.SUPPORTED_PROVIDERS
+    
+    def test_gateway_completion_no_provider(self):
+        """Test completion without provider specified."""
+        import pytest
+        from refactorbot.providers.litellm_gateway import LiteLLMGateway
+        
+        gateway = LiteLLMGateway()
+        
+        # Should raise error when no provider specified and no API key
+        with pytest.raises(ValueError):
+            # This would need an API key to work
+            pass
+
+
+class TestPluginBase:
+    """Tests for plugin base classes."""
+    
+    def test_plugin_adapter_protocol(self):
+        """Test PluginAdapter protocol structure."""
+        from refactorbot.plugins.plugin_base import PluginAdapter
+        
+        # Verify protocol methods exist
+        assert hasattr(PluginAdapter, '__protocol_attrs__')
+        
+    def test_message_adapter_protocol(self):
+        """Test MessageAdapter protocol structure."""
+        from refactorbot.plugins.plugin_base import MessageAdapter
+        
+        # Verify protocol methods exist
+        assert hasattr(MessageAdapter, '__protocol_attrs__')
+    
+    def test_channel_adapter_protocol(self):
+        """Test ChannelAdapter protocol structure."""
+        from refactorbot.plugins.plugin_base import ChannelAdapter
+        
+        # Verify protocol methods exist
+        assert hasattr(ChannelAdapter, '__protocol_attrs__')

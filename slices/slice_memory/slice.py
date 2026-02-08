@@ -191,7 +191,36 @@ class SliceMemory(BaseSlice):
     
     async def health_check(self) -> Dict[str, Any]:
         """Health check for memory slice."""
+        # Check database connection
+        db_connected = False
+        try:
+            if self._database and self._database._connection:
+                await self._database._connection.execute("SELECT 1")
+                db_connected = True
+        except Exception:
+            db_connected = False
+        
+        # Check memory count
+        memory_count = 0
+        try:
+            if db_connected:
+                result = await self._database.fetchone("SELECT COUNT(*) as count FROM memories")
+                memory_count = result["count"] if result else 0
+        except Exception:
+            pass
+        
+        # Determine overall health
+        if db_connected:
+            status = "healthy"
+        else:
+            status = "degraded"
+        
         return {
-            "status": "healthy",
-            "slice": self.slice_id
+            "status": status,
+            "slice": self.slice_id,
+            "version": self.slice_version,
+            "initialized": self._status != SliceStatus.INITIALIZING,
+            "database_connected": db_connected,
+            "memory_count": memory_count,
+            "timestamp": datetime.utcnow().isoformat()
         }

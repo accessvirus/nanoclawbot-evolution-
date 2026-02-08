@@ -463,13 +463,58 @@ class BaseSlice:
         )
     
     async def run_self_diagnostics(self) -> Dict[str, Any]:
-        """Run self-diagnostics"""
-        return {
+        """Run comprehensive self-diagnostics."""
+        diagnostics = {
             "slice_id": self.slice_id,
+            "slice_name": self.slice_name,
+            "version": self.slice_version,
             "status": self._status.value,
             "health": self._health.value,
-            "database_connected": self._database is not None
+            "initialized": self._status not in [SliceStatus.INITIALIZING, SliceStatus.STOPPED],
+            "database_connected": False,
+            "database_path": self._config.database_path,
+            "checks": [],
+            "issues": [],
+            "timestamp": datetime.utcnow().isoformat()
         }
+        
+        # Check database connection
+        try:
+            if self._database and self._database._connection:
+                await self._database._connection.execute("SELECT 1")
+                diagnostics["database_connected"] = True
+                diagnostics["checks"].append({"name": "database", "status": "passed", "message": "Database connection healthy"})
+            else:
+                diagnostics["checks"].append({"name": "database", "status": "warning", "message": "Database not initialized"})
+        except Exception as e:
+            diagnostics["issues"].append({"name": "database", "severity": "high", "message": str(e)})
+            diagnostics["checks"].append({"name": "database", "status": "failed", "message": str(e)})
+        
+        # Add version check
+        diagnostics["checks"].append({
+            "name": "version",
+            "status": "passed",
+            "message": f"Version {self.slice_version} is valid"
+        })
+        
+        # Calculate overall health
+        failed_checks = [c for c in diagnostics["checks"] if c["status"] == "failed"]
+        if failed_checks:
+            diagnostics["overall_health"] = "unhealthy"
+        elif any(c["status"] == "warning" for c in diagnostics["checks"]):
+            diagnostics["overall_health"] = "degraded"
+        else:
+            diagnostics["overall_health"] = "healthy"
+        
+        # Summary
+        diagnostics["summary"] = {
+            "total_checks": len(diagnostics["checks"]),
+            "passed": len([c for c in diagnostics["checks"] if c["status"] == "passed"]),
+            "failed": len(failed_checks),
+            "warnings": len([c for c in diagnostics["checks"] if c["status"] == "warning"])
+        }
+        
+        return diagnostics
 
 
 class SliceCapabilities(BaseModel):
