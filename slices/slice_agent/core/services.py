@@ -201,11 +201,17 @@ class AgentExecutionServices:
         try:
             # REAL LLM CALL - Using OpenRouter Gateway
             from providers.openrouter_gateway import OpenRouterGateway, OpenRouterConfig
+            import os
             
-            # Get API key from slice config or environment
-            api_key = getattr(self.slice.config, 'openrouter_api_key', None) or \
-                      getattr(self.slice, 'openrouter_api_key', None) or \
-                      "sk-default-key"
+            # Get API key from environment or .env file
+            api_key = (
+                os.environ.get('OPENROUTER_API_KEY') or
+                getattr(self.slice.config, 'openrouter_api_key', None) or
+                getattr(self.slice, 'openrouter_api_key', None)
+            )
+            
+            if not api_key or api_key == "sk-default-key":
+                return {"success": False, "error": "OPENROUTER_API_KEY not configured. Set it in .env file."}
             
             # Create gateway and make real LLM call
             config = OpenRouterConfig(api_key=api_key)
