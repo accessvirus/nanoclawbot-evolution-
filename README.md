@@ -11,12 +11,14 @@ RefactorBot is a **Self-Aware Atomic Vertical Slice Architecture** where each sl
 
 ## ✨ Features
 
-- **8 Vertical Slices** - Each with its own SQLite database, services, and UI
+- **9 Vertical Slices** - Each with its own SQLite database, services, and UI
 - **Master Core Orchestrator** - Hierarchical AI orchestration of all slices
 - **Self-Aware Slices** - Each slice has SelfImprovementServices for meta-reasoning
 - **Meta SDLC CI/CD** - Each slice can self-improve and deploy itself
-- **OpenRouter Integration** - Unified multi-model access layer
+- **Dual LLM Gateways** - OpenRouter + LiteLLM (50+ providers)
 - **Plugin System** - Discord, Telegram, Feishu, WhatsApp integrations
+- **Tool Handlers** - File system, shell execution, web search/fetch
+- **Scheduling System** - Cron-based scheduling with heartbeat monitoring
 - **Production Ready** - Full test suite, observability, deployment automation
 
 ## 📁 Project Structure
@@ -27,23 +29,34 @@ refactorbot/
 │   ├── master_core.py              # Core orchestrator (79% coverage)
 │   ├── dashboard_connector.py      # Dashboard integration (62%)
 │   ├── global_state.py            # Global state (67%)
-│   └── resource_allocator.py      # Resource allocation (59%)
+│   ├── resource_allocator.py      # Resource allocation (59%)
+│   └── master_chat.py             # Chat orchestration
 ├── master_dashboard/               # Streamlit Master Dashboard
-│   └── app.py
-├── slices/                        # 8 Vertical Slices
+│   ├── app.py                     # Main dashboard app
+│   └── 06_plugins.py              # Plugins management page
+├── slices/                        # 9 Vertical Slices
 │   ├── slice_base.py              # Base classes & protocols (71%)
 │   ├── slice_agent/               # Agent Core Slice (41%)
 │   ├── slice_tools/               # Tool System Slice (40%)
+│   │   └── core/handlers/         # Tool implementations
+│   │       ├── file_handlers.py   # File read/write/list
+│   │       ├── exec_handler.py    # Shell execution
+│   │       └── web_handlers.py    # Web search/fetch
 │   ├── slice_memory/              # Memory System Slice (51%)
 │   ├── slice_communication/       # Communication Slice (42%)
 │   ├── slice_session/             # Session Slice (42%)
 │   ├── slice_providers/          # Providers Slice (38%)
+│   │   └── litellm_gateway.py     # LiteLLM (50+ providers)
 │   ├── slice_skills/             # Skills Slice (38%)
 │   ├── slice_eventbus/            # Event Bus Slice (38%)
+│   ├── slice_scheduling/          # Scheduling Slice (NEW)
+│   │   └── core/services.py       # Cron scheduling, heartbeat
 │   └── meta_sdlc/               # Meta SDLC module
 ├── providers/                      # LLM Providers
-│   └── openrouter_gateway.py      # OpenRouter integration
+│   ├── openrouter_gateway.py      # OpenRouter integration
+│   └── litellm_gateway.py         # LiteLLM (50+ providers)
 ├── plugins/                       # Plugin System
+│   ├── plugin_base.py             # Base adapter classes
 │   ├── discord/adapter.py
 │   ├── telegram/adapter.py
 │   ├── feishu/adapter.py
@@ -62,6 +75,10 @@ refactorbot/
 ├── data/                         # SQLite databases
 ├── pyproject.toml
 ├── requirements.txt
+├── README.md
+├── IMPLEMENTATION.md
+├── masteraudit.md                # Master audit report
+├── fullcomplyTODO.md             # Implementation roadmap
 └── main.py
 ```
 
@@ -70,17 +87,19 @@ refactorbot/
 | Slice | ID | Coverage | Description |
 |-------|-----|----------|-------------|
 | **Agent Core** | `slice_agent` | 41% | Core agent logic and chat handling |
-| **Tools** | `slice_tools` | 40% | Tool registry and execution |
+| **Tools** | `slice_tools` | 40% | Tool registry, file/exec/web handlers |
 | **Memory** | `slice_memory` | 51% | Persistent memory storage |
 | **Communication** | `slice_communication` | 42% | Channel management |
 | **Session** | `slice_session` | 42% | Session handling |
-| **Providers** | `slice_providers` | 38% | LLM provider management |
+| **Providers** | `slice_providers` | 38% | LLM provider management + LiteLLM |
 | **Skills** | `slice_skills` | 38% | Skill registry |
 | **Event Bus** | `slice_eventbus` | 38% | Event publishing |
+| **Scheduling** | `slice_scheduling` | NEW | Cron scheduling, heartbeat monitoring |
 
 Each slice contains:
 - `slice.py` - Main slice implementation
 - `core/services.py` - Business logic services
+- `core/handlers/` - Tool handlers (slice_tools only)
 - `database/schema.sql` - SQLite schema
 - `ui/pages/` - Streamlit UI pages
 
@@ -92,6 +111,7 @@ Each slice contains:
 2. **Request Routing** - Route operations to appropriate slices
 3. **Resource Allocation** - Manage slice quotas and resource usage
 4. **Dashboard Integration** - Publish events, track metrics, manage alerts
+5. **Chat Orchestration** - Coordinate multi-slice chat responses
 
 ### Self-Aware Slices
 
@@ -155,18 +175,72 @@ async def main():
 asyncio.run(main())
 ```
 
+## 🔌 Tool Handlers
+
+### File Handlers (`slice_tools/core/handlers/file_handlers.py`)
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents with line ranges |
+| `write_to_file` | Create or overwrite files |
+| `search_and_replace` | Precise text search/replace |
+| `list_files` | List directory contents |
+
+### Exec Handler (`slice_tools/core/handlers/exec_handler.py`)
+
+| Tool | Description |
+|------|-------------|
+| `execute_command` | Shell execution with security guards |
+| `list_files` | Directory listing |
+| `delete_file` | File/directory deletion |
+
+### Web Handlers (`slice_tools/core/handlers/web_handlers.py`)
+
+| Tool | Description |
+|------|-------------|
+| `web_search` | Web search functionality |
+| `web_fetch` | HTTP GET requests |
+
 ## 🔌 Plugin System
 
 Available adapters:
 
-| Plugin | Location |
-|--------|----------|
-| Discord | `plugins/discord/adapter.py` |
-| Telegram | `plugins/telegram/adapter.py` |
-| Feishu | `plugins/feishu/adapter.py` |
-| WhatsApp | `plugins/whatsapp/adapter.py` |
+| Plugin | Location | Status |
+|--------|----------|--------|
+| Discord | `plugins/discord/adapter.py` | ✅ Implemented |
+| Telegram | `plugins/telegram/adapter.py` | ✅ Implemented |
+| Feishu | `plugins/feishu/adapter.py` | ✅ Implemented |
+| WhatsApp | `plugins/whatsapp/adapter.py` | ✅ Implemented |
 
-## 🧪 Testing
+Base classes in `plugins/plugin_base.py`:
+- `PluginAdapter` - Base adapter interface
+- `MessageAdapter` - Messaging capabilities
+- `ChannelAdapter` - Channel-specific logic
+
+## 🤖 LLM Providers
+
+### OpenRouter Gateway (`providers/openrouter_gateway.py`)
+
+Unified access to 100+ models through OpenRouter.
+
+### LiteLLM Gateway (`providers/litellm_gateway.py`)
+
+50+ providers including:
+- OpenAI, Anthropic, Google, Mistral
+- Azure, AWS Bedrock, VertexAI
+- HuggingFace, Cohere, AI21, and more
+
+## ⏰ Scheduling System (`slice_scheduling/`)
+
+| Feature | Description |
+|---------|-------------|
+| **Cron Scheduling** | Cron expression-based task scheduling |
+| **Heartbeat Monitoring** | Task health and liveness checks |
+| **Workflow Support** | Multi-step task workflows |
+| **Execution History** | Track task execution results |
+| **Alerting** | Notification on failures |
+
+##  Testing
 
 ```bash
 # Run all tests
@@ -195,15 +269,20 @@ python -m pytest tests/test_master_core.py -v
 | master_core/dashboard_connector.py | 62% |
 | master_core/global_state.py | 67% |
 | master_core/resource_allocator.py | 59% |
+| master_core/master_chat.py | NEW |
 | slices/slice_base.py | 71% |
 | slices/slice_agent/ | 41% |
 | slices/slice_tools/ | 40% |
+| slices/slice_tools/core/handlers/ | NEW |
 | slices/slice_memory/ | 51% |
 | slices/slice_communication/ | 42% |
 | slices/slice_session/ | 42% |
 | slices/slice_providers/ | 38% |
+| slices/slice_providers/litellm_gateway.py | NEW |
 | slices/slice_skills/ | 38% |
 | slices/slice_eventbus/ | 38% |
+| slices/slice_scheduling/ | NEW |
+| plugins/plugin_base.py | NEW |
 | **Overall** | **60%** |
 
 ## ⚙️ Configuration
@@ -213,6 +292,7 @@ python -m pytest tests/test_master_core.py -v
 ```env
 # Master Core
 OPENROUTER_API_KEY=your_api_key
+LITELLM_API_KEY=your_api_key
 DATA_DIR=data
 
 # Slice Databases
@@ -255,19 +335,21 @@ kubectl apply -f deployment.yaml
 ## 📝 Documentation
 
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) - Full architecture design
-- [TODO.md](TODO.md) - Execution plan
-- [todo-fixV4.md](todo-fixV4.md) - Phase 4 completion
-- [auditV4.md](auditV4.md) - Final audit report
+- [masteraudit.md](masteraudit.md) - Master audit report
+- [fullcomplyTODO.md](fullcomplyTODO.md) - Implementation roadmap
+- Individual `.md` audit files in each module directory
 
 ## 🏆 Status
 
 | Metric | Value |
 |--------|-------|
-| **Grade** | A |
+| **Grade** | A- |
 | **Tests** | 50/50 passing |
 | **Coverage** | 60% |
-| **Slices** | 8/8 implemented |
-| **Plugins** | 4/4 available |
+| **Slices** | 9/9 implemented |
+| **Plugins** | 4/4 implemented |
+| **LLM Gateways** | 2/2 implemented |
+| **Tool Handlers** | 3/3 implemented |
 
 ## 📄 License
 

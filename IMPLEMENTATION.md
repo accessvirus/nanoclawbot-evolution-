@@ -13,7 +13,9 @@ RefactorBot is a **Self-Aware Atomic Vertical Slice Architecture** where each sl
 - **Meta SDLC**: Each slice can self-improve, test, and deploy itself
 - **Master Dashboard**: Streamlit-based unified UI for all slices
 - **Production Ready**: Full test suite (50 tests, 60% coverage), observability
-- **OpenRouter Integration**: Unified multi-model access layer
+- **Dual LLM Gateways**: OpenRouter + LiteLLM (50+ providers)
+- **Tool Handlers**: File system, shell execution, web search/fetch
+- **Scheduling System**: Cron-based scheduling with heartbeat monitoring
 
 ---
 
@@ -22,46 +24,49 @@ RefactorBot is a **Self-Aware Atomic Vertical Slice Architecture** where each sl
 ### High-Level System Architecture
 
 ```
-                    ┌─────────────────────────────────────┐
-                    │     Master Dashboard (Streamlit)     │
-                    │   ┌─────────┬─────────┬─────────┐   │
-                    │   │ Overview│ Analytics│ Control │   │
-                    │   └─────────┴─────────┴─────────┘   │
-                    └──────────────┬──────────────────────┘
-                                   │
-                    ┌──────────────▼──────────────────────┐
-                    │        Master Core Orchestrator      │
-                    │  ┌──────────┬──────────┬────────┐ │
-                    │  │ Global   │ Resource │DashBoard│ │
-                    │  │ State    │ Allocator│Connector│ │
-                    │  └──────────┴──────────┴────────┘ │
-                    └──────────────┬──────────────────────┘
-                                   │
-        ┌──────────────────────────┼──────────────────────────┐
-        │                          │                          │
-        ▼                          ▼                          ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│ slice_agent   │      │ slice_tools   │      │ slice_memory  │
-│  - core/      │      │  - core/     │      │  - core/     │
-│  - database/  │      │  - database/  │      │  - database/  │
-│  - ui/pages/  │      │  - ui/pages/  │      │  - ui/pages/  │
-└───────────────┘      └───────────────┘      └───────────────┘
-        │                          │                          │
-        ▼                          ▼                          ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│slice_commun.. │      │slice_session  │      │slice_providers│
-│  - core/      │      │  - core/     │      │  - core/     │
-│  - database/  │      │  - database/  │      │  - database/  │
-│  - ui/pages/  │      │  - ui/pages/  │      │  - ui/pages/  │
-└───────────────┘      └───────────────┘      └───────────────┘
-        │                          │                          │
-        ▼                          ▼                          ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│slice_skills   │      │slice_eventbus │      │   Providers   │
-│  - core/      │      │  - core/      │      │-OpenRouter GW │
-│  - database/  │      │  - ui/pages/  │      │               │
-│  - ui/pages/  │      └───────────────┘      └───────────────┘
-└───────────────┘
+                          ┌─────────────────────────────────────┐
+                          │     Master Dashboard (Streamlit)     │
+                          │   ┌─────────┬─────────┬─────────┐   │
+                          │   │ Overview│ Analytics│ Control │   │
+                          │   └─────────┴─────────┴─────────┘   │
+                          └──────────────┬──────────────────────┘
+                                         │
+                          ┌──────────────▼──────────────────────┐
+                          │        Master Core Orchestrator      │
+                          │  ┌──────────┬──────────┬────────┐  │
+                          │  │ Global   │ Resource │DashBoard│  │
+                          │  │ State    │ Allocator│Connector│  │
+                          │  │ Master   │         │        │  │
+                          │  │ Chat     │         │        │  │
+                          │  └──────────┴──────────┴────────┘  │
+                          └──────────────┬──────────────────────┘
+                                         │
+         ┌──────────────────────────┼──────────────────────────┐
+         │                          │                          │
+         ▼                          ▼                          ▼
+ ┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+ │ slice_agent   │      │ slice_tools   │      │ slice_memory  │
+ │  - core/      │      │  - core/      │      │  - core/     │
+ │  - ui/pages/  │      │  - handlers/  │      │  - ui/pages/  │
+ │               │      │    - file     │      │               │
+ │               │      │    - exec    │      │               │
+ │               │      │    - web     │      │               │
+ └───────────────┘      └───────────────┘      └───────────────┘
+         │                          │                          │
+         ▼                          ▼                          ▼
+ ┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+ │slice_commun.. │      │slice_session  │      │slice_providers│
+ │  - core/      │      │  - core/     │      │  - core/     │
+ │  - ui/pages/  │      │  - ui/pages/  │      │- litellm GW  │
+ └───────────────┘      └───────────────┘      └───────────────┘
+         │                          │                          │
+         ▼                          ▼                          ▼
+ ┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+ │slice_skills   │      │slice_eventbus │      │slice_scheduling│
+ │  - core/      │      │  - core/      │      │  - core/     │
+ │  - ui/pages/  │      └───────────────┘      │- cron sched  │
+ └───────────────┘                             │- heartbeat  │
+                                               └───────────────┘
 ```
 
 ### Hierarchical Orchestration
@@ -78,20 +83,25 @@ Level 0: Master Core AI
     │
     ├── Global State Manager
     ├── Resource Allocator
-    └── Dashboard Connector
+    ├── Dashboard Connector
+    └── Master Chat Orchestrator
             │
-    ┌───────┴───────┬───────┬───────┬───────┬───────┬───────┬───────┐
-    ▼               ▼       ▼       ▼       ▼       ▼       ▼       ▼
-Level 1: Domain Slices (8 total)
+    ┌───────┴───────┬───────┬───────┬───────┬───────┬───────┬───────┬───────┐
+    ▼               ▼       ▼       ▼       ▼       ▼       ▼       ▼       ▼
+Level 1: Domain Slices (9 total)
 │
 ├── slice_agent     → SQLite: data/slice_agent.db
-├── slice_tools     → SQLite: data/slice_tools.db
-├── slice_memory    → SQLite: data/slice_memory.db
+├── slice_tools    → SQLite: data/slice_tools.db
+│   └── handlers/  → file_handlers.py, exec_handler.py, web_handlers.py
+├── slice_memory   → SQLite: data/slice_memory.db
 ├── slice_communication → SQLite: data/slice_communication.db
-├── slice_session   → SQLite: data/slice_session.db
+├── slice_session  → SQLite: data/slice_session.db
 ├── slice_providers → SQLite: data/slice_providers.db
-├── slice_skills    → SQLite: data/slice_skills.db
-└── slice_eventbus  → In-memory event bus
+│   └── litellm_gateway.py (50+ providers)
+├── slice_skills   → SQLite: data/slice_skills.db
+├── slice_eventbus  → In-memory event bus
+└── slice_scheduling → SQLite: data/slice_scheduling.db
+    └── core/services.py (cron, heartbeat)
 ```
 
 ---
@@ -202,14 +212,12 @@ class SelfImprovementServices:
 - Request/response processing
 - Context management
 
-**Core Operations**:
-- `agent_chat` - Process chat messages
-- `agent_analyze` - Analyze requests
-
 **Structure**:
 ```
 slice_agent/
-├── slice.py              # Main slice implementation (91 lines)
+├── slice.py              # Main slice implementation
+├── core/
+│   └── services.py      # Agent services
 └── __init__.py
 ```
 
@@ -227,13 +235,21 @@ slice_agent/
 - Tool registry
 - Tool execution
 - Tool metadata management
+- **File Handlers** - File read/write/list/search
+- **Exec Handler** - Shell execution with security
+- **Web Handlers** - Web search and fetch
 
 **Structure**:
 ```
 slice_tools/
-├── slice.py              # Main slice (93 lines)
+├── slice.py              # Main slice
 ├── core/
-│   └── services.py      # Tool services (60 lines)
+│   ├── services.py      # Tool services
+│   └── handlers/
+│       ├── __init__.py
+│       ├── file_handlers.py    # read_file, write_to_file, search_and_replace, list_files
+│       ├── exec_handler.py     # execute_command with security guards
+│       └── web_handlers.py     # web_search, web_fetch
 ├── database/
 │   ├── schema.sql       # SQLite schema
 │   └── db_manager.py    # Database manager
@@ -245,30 +261,13 @@ slice_tools/
 
 **Coverage**: 40%
 
-**Database Schema**:
-```sql
-CREATE TABLE tools (
-    id TEXT PRIMARY KEY,
-    name TEXT UNIQUE,
-    description TEXT,
-    schema TEXT,
-    category TEXT,
-    enabled BOOLEAN DEFAULT 1,
-    version TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+**Tool Handlers Implemented**:
 
-CREATE TABLE tool_executions (
-    id TEXT PRIMARY KEY,
-    tool_id TEXT,
-    parameters TEXT,
-    result TEXT,
-    success BOOLEAN,
-    error_message TEXT,
-    duration_ms INTEGER,
-    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+| Handler | File | Tools |
+|---------|------|-------|
+| File Handlers | `file_handlers.py` | read_file, write_to_file, search_and_replace, list_files, delete_file |
+| Exec Handler | `exec_handler.py` | execute_command, list_files, delete_file |
+| Web Handlers | `web_handlers.py` | web_search, web_fetch |
 
 ---
 
@@ -286,9 +285,9 @@ CREATE TABLE tool_executions (
 **Structure**:
 ```
 slice_memory/
-├── slice.py              # Main slice (93 lines)
+├── slice.py              # Main slice
 ├── core/
-│   └── services.py      # Memory services (188 lines)
+│   └── services.py      # Memory services
 ├── database/
 │   ├── schema.sql       # SQLite schema
 │   └── db_manager.py    # Database manager
@@ -299,26 +298,6 @@ slice_memory/
 ```
 
 **Coverage**: 51%
-
-**Database Schema**:
-```sql
-CREATE TABLE memories (
-    id TEXT PRIMARY KEY,
-    key TEXT UNIQUE,
-    value TEXT,
-    memory_type TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    access_count INTEGER DEFAULT 0,
-    ttl_seconds INTEGER
-);
-
-CREATE TABLE memory_metadata (
-    memory_id TEXT PRIMARY KEY,
-    metadata_key TEXT,
-    metadata_value TEXT
-);
-```
 
 ---
 
@@ -336,9 +315,9 @@ CREATE TABLE memory_metadata (
 **Structure**:
 ```
 slice_communication/
-├── slice.py              # Main slice (93 lines)
+├── slice.py              # Main slice
 ├── core/
-│   └── services.py      # Communication services (45 lines)
+│   └── services.py      # Communication services
 ├── database/
 │   └── schema.sql       # SQLite schema
 └── ui/pages/
@@ -365,9 +344,9 @@ slice_communication/
 **Structure**:
 ```
 slice_session/
-├── slice.py              # Main slice (93 lines)
+├── slice.py              # Main slice
 ├── core/
-│   └── services.py      # Session services (52 lines)
+│   └── services.py      # Session services
 ├── database/
 │   └── schema.sql       # SQLite schema
 └── ui/pages/
@@ -390,13 +369,14 @@ slice_session/
 - LLM provider management
 - Model configuration
 - Cost tracking
+- **LiteLLM Gateway** - 50+ providers
 
 **Structure**:
 ```
 slice_providers/
-├── slice.py              # Main slice (105 lines)
+├── slice.py              # Main slice
 ├── core/
-│   └── services.py      # Provider services (57 lines)
+│   └── services.py      # Provider services
 ├── database/
 │   └── schema.sql       # SQLite schema
 └── ui/pages/
@@ -406,6 +386,15 @@ slice_providers/
 ```
 
 **Coverage**: 38%
+
+**LiteLLM Gateway** (`providers/litellm_gateway.py`):
+
+Supports 50+ providers:
+- OpenAI, Anthropic, Google, Mistral
+- Azure, AWS Bedrock, VertexAI
+- HuggingFace, Cohere, AI21
+- DeepInfra, Perplexity, Together AI
+- And many more...
 
 ---
 
@@ -423,9 +412,9 @@ slice_providers/
 **Structure**:
 ```
 slice_skills/
-├── slice.py              # Main slice (105 lines)
+├── slice.py              # Main slice
 ├── core/
-│   └── services.py      # Skill services (60 lines)
+│   └── services.py      # Skill services
 ├── database/
 │   └── schema.sql       # SQLite schema
 └── ui/pages/
@@ -452,13 +441,45 @@ slice_skills/
 **Structure**:
 ```
 slice_eventbus/
-├── slice.py              # Main slice (105 lines)
+├── slice.py              # Main slice
 ├── core/
-│   └── services.py      # Event services (77 lines)
+│   └── services.py      # Event services
 └── __init__.py
 ```
 
 **Coverage**: 38%
+
+---
+
+### Slice 9: Scheduling Slice (`slice_scheduling`) - NEW
+
+**Location**: `refactorbot/slices/slice_scheduling/`
+
+**Database**: `data/slice_scheduling.db`
+
+**Responsibilities**:
+- Cron-based task scheduling
+- Heartbeat monitoring
+- Workflow support
+- Execution history
+- Alerting
+
+**Structure**:
+```
+slice_scheduling/
+├── slice.py              # Main slice
+├── core/
+│   ├── __init__.py
+│   └── services.py      # Scheduling services (cron, heartbeat)
+└── __init__.py
+```
+
+**Features**:
+- **Cron Scheduling**: Cron expression-based task scheduling
+- **Heartbeat Monitoring**: Task health and liveness checks
+- **Workflow Support**: Multi-step task workflows
+- **Execution History**: Track task execution results
+- **Alerting**: Notification on failures
 
 ---
 
@@ -498,215 +519,348 @@ class MasterCore:
     
     # Orchestration
     async def orchestrate(self, request: OrchestrationRequest) -> OrchestrationResponse: ...
-    async def execute(
+```
+
+### MasterChat Class - NEW
+
+**Location**: `refactorbot/master_core/master_chat.py`
+
+```python
+class MasterChat:
+    """Chat orchestration across multiple slices."""
+    
+    def __init__(self, master_core: MasterCore): ...
+    
+    async def process_message(
         self,
+        message: str,
+        context: Dict[str, Any] = None
+    ) -> ChatResponse: ...
+    
+    async def route_to_slice(
+        self,
+        slice_id: str,
         operation: str,
-        payload: Dict[str, Any] = {},
-        context: Dict[str, Any] = {}
-    ) -> OrchestrationResponse: ...
-    
-    # Status
-    def get_status(self) -> Dict[str, Any]: ...
-    def get_metrics(self) -> Dict[str, Any]: ...
+        payload: Dict
+    ) -> SliceResponse: ...
 ```
 
-### GlobalStateManager
+### Global State Manager
 
-**Location**: `refactorbot/master_core/global_state.py` (108 lines, 67% coverage)
+**Location**: `refactorbot/master_core/global_state.py` (67% coverage)
 
-```python
-class GlobalStateManager:
-    """Global state management for the orchestrator."""
-    
-    def __init__(self, db_path: str): ...
-    def set(self, key: str, value: Any) -> None: ...
-    def get(self, key: str) -> Optional[Any]: ...
-    def delete(self, key: str) -> bool: ...
-    def get_all(self) -> Dict[str, Any]: ...
-```
+### Resource Allocator
 
-### ResourceAllocator
+**Location**: `refactorbot/master_core/resource_allocator.py` (59% coverage)
 
-**Location**: `refactorbot/master_core/resource_allocator.py` (97 lines, 59% coverage)
+### Dashboard Connector
 
-```python
-class ResourceQuota(BaseModel):
-    max_memory_mb: int = 512
-    max_cpu_percent: int = 80
-    max_tokens_per_minute: int = 10000
-    max_db_connections: int = 10
-
-class ResourceAllocator:
-    """Resource allocation and quota management."""
-    
-    def set_quota(self, slice_id: str, quota: ResourceQuota): ...
-    def get_quota(self, slice_id: str) -> Optional[ResourceQuota]: ...
-```
-
-### DashboardConnector
-
-**Location**: `refactorbot/master_core/dashboard_connector.py` (200 lines, 62% coverage)
-
-```python
-class DashboardConnector:
-    """Connector for dashboard integration."""
-    
-    def __init__(self, data_dir: str = "data"): ...
-    def publish_event(self, slice_id: str, event_type: str, description: str) -> str: ...
-    def publish_alert(self, slice_id: str, alert_type: str, title: str, message: str) -> str: ...
-    def track_execution(self, slice_id: str, latency_ms: float, success: bool): ...
-    def get_events(self) -> List[Dict]: ...
-    def get_alerts(self) -> List[Dict]: ...
-```
+**Location**: `refactorbot/master_core/dashboard_connector.py` (62% coverage)
 
 ---
 
-## 🔌 OpenRouter Gateway
+## 🔌 Plugin System
+
+### Plugin Base Classes
+
+**Location**: `refactorbot/plugins/plugin_base.py`
+
+```python
+class PluginAdapter(Protocol):
+    """Base protocol for all plugins."""
+    
+    @property
+    def plugin_id(self) -> str: ...
+    @property
+    def plugin_name(self) -> str: ...
+    @property
+    def plugin_version(self) -> str: ...
+    
+    async def initialize(self, config: Dict[str, Any]) -> None: ...
+    async def start(self) -> None: ...
+    async def stop(self) -> None: ...
+    async def health_check(self) -> HealthStatus: ...
+
+class MessageAdapter(PluginAdapter):
+    """Protocol for messaging capabilities."""
+    
+    async def send_message(self, channel: str, message: str) -> MessageResult: ...
+    async def receive_message(self, channel: str) -> Optional[Message]: ...
+    async def handle_callback(self, callback_data: Dict) -> Response: ...
+
+class ChannelAdapter(MessageAdapter):
+    """Channel-specific adapter implementation."""
+    
+    def __init__(self, channel_config: Dict[str, Any]): ...
+    
+    # Lifecycle
+    async def connect(self) -> None: ...
+    async def disconnect(self) -> None: ...
+    
+    # Message handling
+    async def send(self, message: OutgoingMessage) -> MessageResult: ...
+    async def receive(self) -> List[IncomingMessage]: ...
+```
+
+### Implemented Adapters
+
+| Adapter | Location | Status |
+|---------|----------|--------|
+| Discord | `plugins/discord/adapter.py` | ✅ Implemented |
+| Telegram | `plugins/telegram/adapter.py` | ✅ Implemented |
+| Feishu | `plugins/feishu/adapter.py` | ✅ Implemented |
+| WhatsApp | `plugins/whatsapp/adapter.py` | ✅ Implemented |
+
+---
+
+## 🤖 LLM Gateways
+
+### OpenRouter Gateway
 
 **Location**: `refactorbot/providers/openrouter_gateway.py`
 
+Unified access to 100+ models through OpenRouter.
+
+### LiteLLM Gateway - NEW
+
+**Location**: `refactorbot/providers/litellm_gateway.py`
+
 ```python
-class OpenRouterGateway:
-    """Unified multi-model access layer via OpenRouter."""
+class LiteLLMGateway:
+    """Unified gateway for 50+ LLM providers."""
     
-    def __init__(self, api_key: str): ...
-    async def complete(self, model: str, messages: List[Dict], **kwargs) -> Dict: ...
-    async def stream_complete(self, model: str, messages: List[Dict], **kwargs): ...
-    def list_models(self) -> List[Dict]: ...
-    def get_cost(self, model: str, tokens: int) -> float: ...
+    SUPPORTED_PROVIDERS = [
+        "openai", "anthropic", "google", "mistral",
+        "azure", "bedrock", "vertexai", "huggingface",
+        "cohere", "ai21", "deepinfra", "perplexity",
+        "togetherai", "groq", "cloudflare", "deepseek",
+        "xai", "nvidia", "cerebras", "fireworks",
+        "openrouter", "palmer", "custom", "local",
+        # ... and 30+ more
+    ]
+    
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        default_provider: str = "openai"
+    ): ...
+    
+    async def complete(
+        self,
+        model: str,
+        messages: List[Dict],
+        provider: Optional[str] = None,
+        **kwargs
+    ) -> LLMResponse: ...
+    
+    async def stream_complete(
+        self,
+        model: str,
+        messages: List[Dict],
+        provider: Optional[str] = None,
+        **kwargs
+    ) -> AsyncIterator[str]: ...
 ```
 
 ---
 
-## 🧩 Plugin System
+## ⏰ Tool Handlers Implementation
 
-**Location**: `refactorbot/plugins/`
+### File Handlers
 
-### Available Adapters
+**Location**: `refactorbot/slices/slice_tools/core/handlers/file_handlers.py`
 
-| Plugin | Location | Status |
-|--------|----------|--------|
-| Discord | `plugins/discord/adapter.py` | ✅ Available |
-| Telegram | `plugins/telegram/adapter.py` | ✅ Available |
-| Feishu | `plugins/feishu/adapter.py` | ✅ Available |
-| WhatsApp | `plugins/whatsapp/adapter.py` | ✅ Available |
-
----
-
-## 🧪 Test Suite
-
-### Test Files
-
-| File | Coverage | Tests |
-|------|----------|-------|
-| `tests/test_slices.py` | 99% | 21 tests |
-| `tests/test_master_core.py` | 100% | 6 tests |
-| `tests/test_integration.py` | 99% | 20 tests |
-| `tests/conftest.py` | 54% | Fixtures |
-
-### Running Tests
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run with coverage
-python -m pytest tests/ --cov=refactorbot --cov-report=html
-
-# Run specific test file
-python -m pytest tests/test_master_core.py -v
+```python
+class FileHandlers:
+    """File system operations handlers."""
+    
+    async def read_file(
+        self,
+        path: str,
+        line_ranges: Optional[List[Tuple[int, int]]] = None
+    ) -> FileResult: ...
+    
+    async def write_to_file(
+        self,
+        path: str,
+        content: str,
+        overwrite: bool = False
+    ) -> FileResult: ...
+    
+    async def search_and_replace(
+        self,
+        path: str,
+        operations: List[SearchReplaceOperation]
+    ) -> FileResult: ...
+    
+    async def list_files(
+        self,
+        path: str,
+        recursive: bool = False
+    ) -> ListResult: ...
+    
+    async def delete_file(self, path: str) -> DeleteResult: ...
 ```
 
-### Test Categories
+### Exec Handler
 
-#### Unit Tests (test_slices.py)
-- SliceConfig creation
-- SliceRequest creation
-- SliceResponse creation
-- Agent slice properties & execution
-- Tools slice properties & execution
-- Memory slice properties & operations
-- Communication slice properties
-- Session slice properties
-- Providers slice properties
-- Skills slice properties
-- EventBus slice properties
-- SelfImprovementServices
+**Location**: `refactorbot/slices/slice_tools/core/handlers/exec_handler.py`
 
-#### Integration Tests (test_integration.py)
-- Cross-slice communication
-- Initialize all slices
-- Agent dispatches to tools
-- Memory persists agent state
-- EventBus coordinating slices
-- Orchestration request routing
-- Resource allocation
-- Global state management
-- Dashboard connector
-- Slice lifecycle (start/stop/shutdown)
-- Orchestration request handling
-
----
-
-## 📊 Coverage Report
-
-### By Module
-
-| Module | Statements | Coverage |
-|--------|-----------|----------|
-| master_core/master_core.py | 177 | 79% |
-| master_core/dashboard_connector.py | 200 | 62% |
-| master_core/global_state.py | 108 | 67% |
-| master_core/resource_allocator.py | 97 | 59% |
-| slices/slice_base.py | 223 | 71% |
-| slices/slice_agent/slice.py | 91 | 41% |
-| slices/slice_tools/slice.py | 93 | 40% |
-| slices/slice_memory/slice.py | 93 | 51% |
-| slices/slice_memory/core/services.py | 188 | 21% |
-| slices/slice_communication/slice.py | 93 | 42% |
-| slices/slice_session/slice.py | 93 | 42% |
-| slices/slice_providers/slice.py | 105 | 38% |
-| slices/slice_skills/slice.py | 105 | 38% |
-| slices/slice_eventbus/slice.py | 105 | 38% |
-| **TOTAL** | **2628** | **60%** |
-
----
-
-## 🚀 Deployment
-
-### Docker
-
-**Location**: `deployment/docker/`
-
-```bash
-cd deployment/docker
-docker-compose up -d
+```python
+class ExecHandler:
+    """Shell execution handler with security guards."""
+    
+    async def execute_command(
+        self,
+        command: str,
+        timeout: int = 30,
+        environment: Optional[Dict] = None,
+        working_directory: Optional[str] = None
+    ) -> ExecResult: ...
+    
+    # Security features:
+    # - Command whitelisting
+    # - Dangerous command blocking
+    # - Output sanitization
+    # - Environment sandboxing
 ```
 
-### Kubernetes
+### Web Handlers
 
-**Location**: `deployment/kubernetes/`
+**Location**: `refactorbot/slices/slice_tools/core/handlers/web_handlers.py`
 
-```bash
-cd deployment/kubernetes
-kubectl apply -f deployment.yaml
+```python
+class WebHandlers:
+    """Web search and fetch handlers."""
+    
+    async def web_search(
+        self,
+        query: str,
+        num_results: int = 10,
+        timeout: int = 10
+    ) -> SearchResult: ...
+    
+    async def web_fetch(
+        self,
+        url: str,
+        method: str = "GET",
+        headers: Optional[Dict] = None,
+        timeout: int = 10
+    ) -> FetchResult: ...
 ```
 
 ---
 
-## 📝 Summary
+## ⏰ Scheduling System
 
-| Metric | Value|
-| ** |
-|--------|-------Grade** | A |
-| **Tests** | 50/50 passing |
-| **Coverage** | 60% |
-| **Slices** | 8/8 implemented |
-| **Lines of Code** | ~2628 |
-| **Plugins** | 4 available |
+### Scheduling Slice
+
+**Location**: `refactorbot/slices/slice_scheduling/core/services.py`
+
+```python
+class SchedulingServices:
+    """Cron-based task scheduling and heartbeat monitoring."""
+    
+    async def schedule_task(
+        self,
+        task_id: str,
+        cron_expression: str,
+        task_func: Callable,
+        **kwargs
+    ) -> SchedulingResult: ...
+    
+    async def heartbeat_check(
+        self,
+        task_id: str,
+        interval: int = 30
+    ) -> HeartbeatStatus: ...
+    
+    async def cancel_task(self, task_id: str) -> bool: ...
+    
+    async def get_task_history(
+        self,
+        task_id: str,
+        limit: int = 100
+    ) -> List[ExecutionRecord]: ...
+```
 
 ---
 
-## 🔗 Repository
+## 📋 Audit Documentation
 
-https://github.com/accessvirus/nanoclawbot-evolution-
+### Master Audit Report
+
+**Location**: `refactorbot/masteraudit.md`
+
+Comprehensive audit of the entire codebase with:
+- Architecture analysis
+- Code quality assessment
+- Security review
+- Performance analysis
+- Recommendations
+
+### Module Audit Files
+
+Every Python module has a corresponding `.md` audit file:
+
+| Module | Audit File |
+|--------|------------|
+| `main.py` | `main.py.md` |
+| `master_core/` | `master_core/__init__.py.md`, `master_core/master_core.py.md`, etc. |
+| `slices/` | `slices/__init__.py.md`, `slices/slice_*.py.md`, etc. |
+| `providers/` | `providers/__init__.py.md`, `providers/openrouter_gateway.py.md`, etc. |
+| `plugins/` | `plugins/__init__.py.md`, `plugins/plugin_base.py.md`, etc. |
+| `infrastructure/` | `infrastructure/__init__.py.md`, etc. |
+
+Each audit file includes:
+- File overview
+- Code analysis
+- Quality assessment
+- Security review
+- Performance analysis
+- Compliance checklist
+- **Critical Improvements** section
+
+---
+
+## 📊 Status Summary
+
+| Metric | Value |
+|--------|-------|
+| **Grade** | A- |
+| **Total Slices** | 9 |
+| **Implemented Slices** | 9/9 |
+| **Test Coverage** | 60% |
+| **Tests Passing** | 50/50 |
+| **LLM Gateways** | 2 (OpenRouter, LiteLLM) |
+| **Plugin Adapters** | 4 (Discord, Telegram, Feishu, WhatsApp) |
+| **Tool Handlers** | 3 (File, Exec, Web) |
+| **Audit Files** | 80+ |
+
+---
+
+## 🔄 Implementation Roadmap
+
+### Completed (v2.0)
+- ✅ Vertical Slice Architecture (9 slices)
+- ✅ Master Core Orchestrator
+- ✅ Master Dashboard (Streamlit)
+- ✅ Dual LLM Gateways
+- ✅ Plugin System (4 adapters)
+- ✅ Tool Handlers (File, Exec, Web)
+- ✅ Scheduling System
+- ✅ Comprehensive Audit Documentation
+
+### Future Enhancements
+- [] Increase test coverage to 80%
+- [] Add distributed slicing
+- [] Implement workflow engine
+- [] Add more LLM providers
+- [] Improve security audit
+- [] Add performance benchmarking
+
+---
+
+**Last Updated**: 2026-02-08
+**Version**: 2.0
+**Grade**: A-
