@@ -110,7 +110,7 @@ class MasterCore:
             self._start_time = datetime.utcnow()
             
             self.dashboard.publish_event(
-                orchestrator_id=self.orchestrator_id,
+                slice_id="master",
                 event_type="initialized",
                 description="MasterCore initialized"
             )
@@ -118,7 +118,7 @@ class MasterCore:
             return True
         except Exception as e:
             self.dashboard.publish_alert(
-                orchestrator_id=self.orchestrator_id,
+                slice_id="master",
                 alert_type="error",
                 title="MasterCore initialization failed",
                 message=str(e)

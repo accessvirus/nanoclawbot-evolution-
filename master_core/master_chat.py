@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from refactorbot.providers.openrouter_gateway import OpenRouterGateway, OpenRouterConfig
+from providers.openrouter_gateway import OpenRouterGateway, OpenRouterConfig
 
 logger = logging.getLogger(__name__)
 

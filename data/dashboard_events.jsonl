@@ -1638,3 +1638,4 @@
 {"event_id":"slice_agent_state_change_1770581153.703865","slice_id":"slice_agent","event_type":"state_change","description":"Slice status changed to ready","timestamp":"2026-02-08T22:05:51.329438","metadata":{"status":"ready","health":"healthy"}}
 {"event_id":"slice_agent_state_change_1770581153.71425","slice_id":"slice_agent","event_type":"state_change","description":"Slice status changed to running","timestamp":"2026-02-08T22:05:51.329438","metadata":{"status":"running","health":"healthy"}}
 {"event_id":"slice_agent_started_1770581153.723251","slice_id":"slice_agent","event_type":"started","description":"Slice slice_agent started","timestamp":"2026-02-08T22:05:51.329438","metadata":{}}
+{"event_id":"master_initialized_1770581995.459573","slice_id":"master","event_type":"initialized","description":"MasterCore initialized","timestamp":"2026-02-08T22:19:55.455573","metadata":{}}

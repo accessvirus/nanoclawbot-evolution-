@@ -557,7 +557,7 @@ def render_master_chat_page():
     
     # Initialize master chat
     if "master_chat" not in st.session_state:
-        from refactorbot.master_core.master_chat import MasterSwarmChat
+        from master_core.master_chat import MasterSwarmChat
         import os
         from dotenv import load_dotenv
         load_dotenv()  # Load .env file
