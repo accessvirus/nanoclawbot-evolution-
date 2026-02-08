@@ -199,8 +199,37 @@ class AgentExecutionServices:
             return {"success": False, "error": f"Agent {agent_id} not found"}
         
         try:
-            # Simulate agent execution (in real implementation, this would call the LLM)
-            result_text = f"Agent '{agent['name']}' processed: {input_text}"
+            # REAL LLM CALL - Using OpenRouter Gateway
+            from providers.openrouter_gateway import OpenRouterGateway, OpenRouterConfig
+            
+            # Get API key from slice config or environment
+            api_key = getattr(self.slice.config, 'openrouter_api_key', None) or \
+                      getattr(self.slice, 'openrouter_api_key', None) or \
+                      "sk-default-key"
+            
+            # Create gateway and make real LLM call
+            config = OpenRouterConfig(api_key=api_key)
+            gateway = OpenRouterGateway(config)
+            
+            # Build prompt from agent instructions
+            system_prompt = agent.get('instructions', f"You are {agent['name']}")
+            
+            # Make real LLM call
+            llm_response = await gateway.complete(
+                prompt=input_text,
+                model=agent.get('model', 'openai/gpt-4-turbo'),
+                system_prompt=system_prompt,
+                temperature=0.7,
+                max_tokens=4000
+            )
+            
+            # Get real result from LLM
+            result_text = llm_response.get("content", "")
+            prompt_tokens = llm_response.get("prompt_tokens", 0)
+            completion_tokens = llm_response.get("completion_tokens", 0)
+            
+            # Close gateway
+            await gateway.close()
             
             end_time = datetime.utcnow()
             duration_ms = (end_time - start_time).total_seconds() * 1000
@@ -213,14 +242,18 @@ class AgentExecutionServices:
                 "status": "completed",
                 "error_message": None,
                 "duration_ms": duration_ms,
-                "executed_at": start_time.isoformat()
+                "executed_at": start_time.isoformat(),
+                "model_used": agent.get('model', 'openai/gpt-4-turbo'),
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens
             }
             
-            # Persist execution
+            # Persist execution with real LLM results
             async with aiosqlite.connect(str(self.db_path)) as db:
                 await db.execute("""
-                    INSERT INTO executions (id, agent_id, input_text, result, status, duration_ms, executed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO executions 
+                    (id, agent_id, input_text, result, status, duration_ms, executed_at, model_used, prompt_tokens, completion_tokens)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     execution_data["id"],
                     execution_data["agent_id"],
@@ -228,18 +261,24 @@ class AgentExecutionServices:
                     execution_data["result"],
                     execution_data["status"],
                     execution_data["duration_ms"],
-                    execution_data["executed_at"]
+                    execution_data["executed_at"],
+                    execution_data["model_used"],
+                    execution_data["prompt_tokens"],
+                    execution_data["completion_tokens"]
                 ))
                 await db.commit()
             
             self._executions[execution_id] = execution_data
             
-            logger.info(f"Agent execution completed: {execution_id}")
+            logger.info(f"Agent execution completed: {execution_id} (model: {execution_data['model_used']}, tokens: {prompt_tokens+completion_tokens})")
             return {
                 "execution_id": execution_id,
                 "agent_id": agent_id,
                 "result": result_text,
-                "duration_ms": duration_ms
+                "duration_ms": duration_ms,
+                "model_used": execution_data["model_used"],
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens
             }
             
         except Exception as e:

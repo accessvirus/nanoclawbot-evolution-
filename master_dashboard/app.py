@@ -223,60 +223,163 @@ def render_control_panel_page():
     st.title("🎛️ Control Panel")
     st.markdown("---")
     
+    # Initialize MasterCore
+    if "master_core" not in st.session_state:
+        try:
+            from master_core.master_core import MasterCore
+            st.session_state.master_core = MasterCore(
+                openrouter_api_key=st.session_state.get("openrouter_api_key", None)
+            )
+            asyncio.run(st.session_state.master_core.initialize())
+        except Exception as e:
+            st.error(f"Failed to initialize MasterCore: {e}")
+            st.session_state.master_core = None
+    
+    master_core = st.session_state.get("master_core")
+    
     slices = [
-        ("Agent Core", "slice_agent_core", "🤖"),
+        ("Agent Core", "slice_agent", "🤖"),
         ("Tools", "slice_tools", "🛠️"),
         ("Memory", "slice_memory", "🧠"),
         ("Communication", "slice_communication", "💬"),
         ("Session", "slice_session", "📁"),
         ("Providers", "slice_providers", "🔌"),
         ("Skills", "slice_skills", "📚"),
-        ("Event Bus", "slice_event_bus", "🚌"),
+        ("Event Bus", "slice_eventbus", "🚌"),
     ]
     
-    states = get_slice_states()
+    ALL_SLICES = [s[1] for s in slices]
+    
+    # Helper functions for async operations
+    def start_all_slices():
+        if master_core:
+            for slice_id in ALL_SLICES:
+                try:
+                    asyncio.run(master_core.initialize_slice(slice_id))
+                    asyncio.run(master_core.start_slice(slice_id))
+                except Exception as e:
+                    st.error(f"Failed to start {slice_id}: {e}")
+            st.success("✅ All slices started!")
+            st.rerun()
+        else:
+            st.error("MasterCore not initialized")
+    
+    def stop_all_slices():
+        if master_core:
+            for slice_id in ALL_SLICES:
+                try:
+                    asyncio.run(master_core.stop_slice(slice_id))
+                except Exception as e:
+                    st.error(f"Failed to stop {slice_id}: {e}")
+            st.warning("All slices stopped.")
+            st.rerun()
+        else:
+            st.error("MasterCore not initialized")
+    
+    def restart_all_slices():
+        if master_core:
+            for slice_id in ALL_SLICES:
+                try:
+                    asyncio.run(master_core.stop_slice(slice_id))
+                    asyncio.run(master_core.initialize_slice(slice_id))
+                    asyncio.run(master_core.start_slice(slice_id))
+                except Exception as e:
+                    st.error(f"Failed to restart {slice_id}: {e}")
+            st.info("All slices restarted!")
+            st.rerun()
+        else:
+            st.error("MasterCore not initialized")
+    
+    def start_slice(slice_id, name):
+        if master_core:
+            try:
+                asyncio.run(master_core.initialize_slice(slice_id))
+                asyncio.run(master_core.start_slice(slice_id))
+                st.success(f"✅ {name} started!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to start {name}: {e}")
+        else:
+            st.error("MasterCore not initialized")
+    
+    def stop_slice(slice_id, name):
+        if master_core:
+            try:
+                asyncio.run(master_core.stop_slice(slice_id))
+                st.warning(f"⏹️ {name} stopped!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to stop {name}: {e}")
+        else:
+            st.error("MasterCore not initialized")
+    
+    def restart_slice(slice_id, name):
+        if master_core:
+            try:
+                asyncio.run(master_core.stop_slice(slice_id))
+                asyncio.run(master_core.initialize_slice(slice_id))
+                asyncio.run(master_core.start_slice(slice_id))
+                st.info(f"🔄 {name} restarted!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to restart {name}: {e}")
+        else:
+            st.error("MasterCore not initialized")
     
     # Action buttons
     col1, col2, col3 = st.columns(3)
     
     with col1:
         if st.button("▶️ Start All Slices"):
-            st.success("Starting all slices... (Demo)")
+            start_all_slices()
     
     with col2:
         if st.button("⏹️ Stop All Slices"):
-            st.warning("Stopping all slices... (Demo)")
+            stop_all_slices()
     
     with col3:
         if st.button("🔄 Restart All Slices"):
-            st.info("Restarting all slices... (Demo)")
+            restart_all_slices()
     
     st.markdown("---")
+    
+    # Get real slice states from MasterCore
+    if master_core:
+        try:
+            states = master_core.get_slice_status()
+        except:
+            states = get_slice_states()
+    else:
+        states = get_slice_states()
     
     # Individual slice controls
     st.subheader("🔌 Individual Slice Controls")
     
     for name, slice_id, emoji in slices:
         state = states.get(slice_id, {})
-        status = state.get("status", "unknown")
+        status = state.get("status", state.get("running", "unknown"))
         
         with st.expander(f"{emoji} {name} ({status})"):
             col_a, col_b, col_c = st.columns(3)
             
             with col_a:
                 if st.button(f"Start {name}", key=f"start_{slice_id}"):
-                    st.success(f"Starting {name}... (Demo)")
+                    start_slice(slice_id, name)
             
             with col_b:
                 if st.button(f"Stop {name}", key=f"stop_{slice_id}"):
-                    st.warning(f"Stopping {name}... (Demo)")
+                    stop_slice(slice_id, name)
             
             with col_c:
                 if st.button(f"Restart {name}", key=f"restart_{slice_id}"):
-                    st.info(f"Restarting {name}... (Demo)")
+                    restart_slice(slice_id, name)
             
-            st.markdown("**Metrics:**")
-            st.json(state.get("metrics", {}))
+            st.markdown("**Status:**")
+            st.json({
+                "registered": state.get("registered", False),
+                "running": state.get("running", False),
+                "resources": state.get("resources", {})
+            })
 
 
 def render_analytics_page():
