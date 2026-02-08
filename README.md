@@ -1,4 +1,4 @@
-# RefactorBot V2 - Self-Aware Atomic Vertical Slice Architecture
+# nanoclawbot-evolution Architecture Refactor Bot V2 - Self-Aware Atomic Vertical Slice Architecture
 
 ## Overview
 
