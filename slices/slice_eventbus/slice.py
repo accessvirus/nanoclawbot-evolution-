@@ -3,9 +3,10 @@ Event Bus Slice - Vertical Slice for Event Bus Management
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
-from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SelfImprovementServices
+from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SliceStatus, HealthStatus, SelfImprovementServices
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,10 @@ class SliceEventBus(AtomicSlice):
         self._config = config or SliceConfig(slice_id="slice_eventbus")
         self._services: Optional[Any] = None
         self._current_request_id: str = ""
+        self._subscribers: Dict[str, Any] = {}
+        self._topics: Dict[str, Any] = {}
+        self._status: SliceStatus = SliceStatus.INITIALIZING
+        self._health: HealthStatus = HealthStatus.UNHEALTHY
     
     @property
     def config(self) -> SliceConfig:

@@ -3,10 +3,11 @@ Providers Slice - Vertical Slice for Provider Management
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from ..slice_base import AtomicSlice, SliceConfig, SliceDatabase, SliceRequest, SliceResponse, SelfImprovementServices
+from ..slice_base import AtomicSlice, SliceConfig, SliceDatabase, SliceRequest, SliceResponse, SliceStatus, HealthStatus, SelfImprovementServices
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,8 @@ class SliceProviders(AtomicSlice):
         self._config = config or SliceConfig(slice_id="slice_providers")
         self._services: Optional[Any] = None
         self._current_request_id: str = ""
+        self._status: SliceStatus = SliceStatus.INITIALIZING
+        self._health: HealthStatus = HealthStatus.UNHEALTHY
         # Initialize database
         data_dir = Path("data")
         data_dir.mkdir(parents=True, exist_ok=True)

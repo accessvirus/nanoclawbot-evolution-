@@ -131,17 +131,45 @@ class SliceDatabase:
         await self._connection.commit()
         return cursor
     
+    async def commit(self) -> None:
+        """Commit the current transaction"""
+        if self._connection:
+            await self._connection.commit()
+    
     async def fetchone(self, query: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         """Fetch one result"""
         cursor = await self.execute(query, params)
         row = await cursor.fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        # Handle both Row objects and tuples
+        if hasattr(row, '_asdict'):
+            return dict(row._asdict())
+        elif isinstance(row, tuple):
+            # Get column names from cursor.description
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            return dict(zip(columns, row))
+        else:
+            return row
     
     async def fetchall(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Fetch all results"""
         cursor = await self.execute(query, params)
         rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        if not rows:
+            return []
+        # Get column names from cursor.description
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        result = []
+        for row in rows:
+            # Handle both Row objects and tuples
+            if hasattr(row, '_asdict'):
+                result.append(dict(row._asdict()))
+            elif isinstance(row, tuple):
+                result.append(dict(zip(columns, row)))
+            else:
+                result.append(row)
+        return result
     
     async def transaction(self) -> AsyncIterator[None]:
         """Context manager for transactions"""

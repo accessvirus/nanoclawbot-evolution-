@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
+from pydantic import BaseModel
 
 
 class LiteLLMConfig(BaseModel):
@@ -52,6 +53,14 @@ class LiteLLMGateway:
     - Streaming support
     """
     
+    # Supported providers
+    SUPPORTED_PROVIDERS = [
+        "openai", "anthropic", "google", "azure", "bedrock",
+        "cohere", "togetherai", "openrouter", "huggingface",
+        "replicate", "mistral", "groq", "cerebras", "fireworksai",
+        "perplexity", "anyscale", "base", "vertexai", "sagemaker"
+    ]
+    
     # Provider to model mapping
     PROVIDER_MODELS = {
         "openai": ["gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-3.5-turbo"],
@@ -63,7 +72,9 @@ class LiteLLMGateway:
         "togetherai": ["togethercomputer/llama-3-70b", "togethercomputer/llama-3-8b"],
     }
     
-    def __init__(self, config: LiteLLMConfig):
+    def __init__(self, config: Optional[LiteLLMConfig] = None):
+        if config is None:
+            config = LiteLLMConfig(api_key="")
         self.config = config
         self.client = httpx.AsyncClient(
             timeout=config.timeout,
@@ -104,6 +115,11 @@ class LiteLLMGateway:
         Returns:
             Response dictionary
         """
+        # Validate API key is configured
+        effective_api_key = api_key or self.config.api_key
+        if not effective_api_key:
+            raise ValueError("API key is required for LLM completion")
+        
         # Build messages
         messages = []
         if system_prompt:

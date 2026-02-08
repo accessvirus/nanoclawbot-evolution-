@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..slice_base import AtomicSlice, SliceConfig, SliceDatabase, SliceRequest, SliceResponse, SelfImprovementServices
+from ..slice_base import AtomicSlice, SliceConfig, SliceDatabase, SliceRequest, SliceResponse, SliceStatus, HealthStatus, SelfImprovementServices
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,6 @@ class ScheduledTask:
     updated_at: str = ""
 
 
-@dataclass
 class SchedulingConfig(SliceConfig):
     """Scheduling slice configuration."""
     default_timeout: int = 300
@@ -105,11 +104,16 @@ class SliceScheduling(AtomicSlice):
         return "1.0.0"
     
     def __init__(self, config: Optional[SchedulingConfig] = None):
-        self._config = config or SchedulingConfig(slice_id="slice_scheduling")
+        if config is None:
+            config = SchedulingConfig()
+            config.slice_id = "slice_scheduling"
+        self._config = config
         self._services: Optional[Any] = None
         self._current_request_id: str = ""
         self._scheduler_task: Optional[asyncio.Task] = None
         self._running = False
+        self._status: SliceStatus = SliceStatus.INITIALIZING
+        self._health: HealthStatus = HealthStatus.UNHEALTHY
         
         # Initialize database
         data_dir = Path("data")
@@ -145,8 +149,20 @@ class SliceScheduling(AtomicSlice):
                 logger.error(f"Scheduler error: {e}")
                 await asyncio.sleep(5)
     
-    async def execute(self, request: SliceRequest) -> SliceResponse:
+    async def execute(
+        self,
+        request: Optional[SliceRequest] = None,
+        *,
+        operation: Optional[str] = None,
+        payload: Optional[Dict[str, Any]] = None
+    ) -> SliceResponse:
         """Public execute method for slice."""
+        # Handle keyword arguments for convenience
+        if request is None:
+            request = SliceRequest(
+                operation=operation or "",
+                payload=payload or {}
+            )
         if not self._running:
             await self.initialize()
         return await self._execute_core(request)
@@ -156,7 +172,7 @@ class SliceScheduling(AtomicSlice):
         self._current_request_id = request.request_id
         operation = request.operation
         
-        if operation == "create_task":
+        if operation == "create_task" or operation == "schedule_task":
             return await self._create_task(request.payload)
         elif operation == "get_task":
             return await self._get_task(request.payload)

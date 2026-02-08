@@ -5,6 +5,7 @@ This slice handles agent lifecycle and orchestration.
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from ..slice_base import (

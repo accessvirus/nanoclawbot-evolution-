@@ -53,8 +53,8 @@ class BaseExecHandler(ABC):
     
     def _resolve_path(self, path: str) -> Path:
         """Resolve and validate path within workspace."""
+        global WORKSPACE_ROOT
         if WORKSPACE_ROOT is None:
-            global WORKSPACE_ROOT
             WORKSPACE_ROOT = Path.cwd()
         
         resolved = Path(path).resolve()

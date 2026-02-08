@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, Protocol, TypeVar
 
 import asyncio
 
@@ -281,3 +281,104 @@ class PluginRegistry(Generic[AdapterType]):
         for name, adapter in self._adapters.items():
             results[name] = await adapter.stop()
         return results
+
+
+# =============================================================================
+# Protocol Definitions (for structural subtyping)
+# =============================================================================
+
+class PluginAdapter(Protocol):
+    """Protocol for plugin adapters."""
+    
+    PLATFORM: PlatformType
+    CONFIG_CLASS: type
+    MESSAGE_CLASS: type
+    USER_CLASS: type
+    
+    @property
+    def config(self) -> ChannelConfig: ...
+    
+    async def initialize(self) -> bool: ...
+    
+    async def send_message(
+        self,
+        chat_id: str,
+        content: str,
+        message_type: MessageType = MessageType.TEXT,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> str: ...
+    
+    async def health_check(self) -> Dict[str, Any]: ...
+    
+    __protocol_attrs__ = {
+        'config', 'initialize', 'send_message', 'health_check',
+        'PLATFORM', 'CONFIG_CLASS', 'MESSAGE_CLASS', 'USER_CLASS'
+    }
+
+
+class MessageAdapter(Protocol):
+    """Protocol for message handling adapters."""
+    
+    async def send_message(
+        self,
+        chat_id: str,
+        content: str,
+        message_type: MessageType = MessageType.TEXT,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> str: ...
+    
+    async def get_message(
+        self,
+        chat_id: str,
+        message_id: str
+    ) -> Optional[ChannelMessage]: ...
+    
+    async def delete_message(
+        self,
+        chat_id: str,
+        message_id: str
+    ) -> bool: ...
+    
+    async def edit_message(
+        self,
+        chat_id: str,
+        message_id: str,
+        content: str
+    ) -> bool: ...
+    
+    __protocol_attrs__ = {
+        'send_message', 'get_message', 'delete_message', 'edit_message'
+    }
+
+
+class ChannelAdapter(Protocol):
+    """Protocol for channel adapters."""
+    
+    PLATFORM: PlatformType
+    
+    @property
+    def config(self) -> ChannelConfig: ...
+    
+    async def initialize(self) -> bool: ...
+    
+    async def start(self) -> bool: ...
+    
+    async def stop(self) -> bool: ...
+    
+    async def is_running(self) -> bool: ...
+    
+    async def health_check(self) -> Dict[str, Any]: ...
+    
+    async def get_user(self, user_id: str) -> Optional[ChannelUser]: ...
+    
+    async def get_chat_history(
+        self,
+        chat_id: str,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[ChannelMessage]: ...
+    
+    __protocol_attrs__ = {
+        'config', 'initialize', 'start', 'stop', 'is_running',
+        'health_check', 'get_user', 'get_chat_history', 'PLATFORM'
+    }

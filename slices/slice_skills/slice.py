@@ -3,9 +3,10 @@ Skills Slice - Vertical Slice for Skills Management
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
-from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SelfImprovementServices
+from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SliceStatus, HealthStatus, SelfImprovementServices
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class SliceSkills(AtomicSlice):
         self._execution_service: Optional[Any] = None
         self._current_request_id: str = ""
         self._initialized: bool = False
+        self._status: SliceStatus = SliceStatus.INITIALIZING
+        self._health: HealthStatus = HealthStatus.UNHEALTHY
     
     @property
     def config(self) -> SliceConfig:

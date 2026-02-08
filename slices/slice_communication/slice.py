@@ -3,9 +3,10 @@ Communication Slice - Vertical Slice for Communication Management
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
-from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SelfImprovementServices
+from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SliceStatus, HealthStatus, SelfImprovementServices
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,8 @@ class SliceCommunication(AtomicSlice):
         self._config = config or SliceConfig(slice_id="slice_communication")
         self._services: Optional[Any] = None
         self._current_request_id: str = ""  # Store request_id for internal methods
+        self._status: SliceStatus = SliceStatus.INITIALIZING
+        self._health: HealthStatus = HealthStatus.UNHEALTHY
     
     @property
     def config(self) -> SliceConfig:

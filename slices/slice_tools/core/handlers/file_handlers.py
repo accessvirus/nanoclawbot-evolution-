@@ -24,9 +24,9 @@ class BaseFileHandler(ABC):
     
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve and validate file path within workspace."""
+        global WORKSPACE_ROOT
         if WORKSPACE_ROOT is None:
             # Try to detect workspace from current directory
-            global WORKSPACE_ROOT
             WORKSPACE_ROOT = Path.cwd()
         
         resolved = Path(file_path).resolve()
@@ -359,3 +359,47 @@ class ListDirTool(BaseFileHandler):
 class SecurityError(Exception):
     """Security violation exception."""
     pass
+
+
+class FileHandlers:
+    """Convenience wrapper class for file handlers."""
+    
+    def __init__(self, workspace_root: Optional[str] = None):
+        self._read_handler = ReadFileTool(workspace_root)
+        self._write_handler = WriteFileTool(workspace_root)
+        self._edit_handler = EditFileTool(workspace_root)
+        self._list_handler = ListDirTool(workspace_root)
+    
+    async def read_file(self, path: str, encoding: str = "utf-8") -> str:
+        """Read file contents."""
+        result = await self._read_handler.execute({"path": path, "encoding": encoding})
+        return result
+    
+    async def write_file(self, path: str, content: str, mode: str = "w", encoding: str = "utf-8") -> str:
+        """Write content to file."""
+        result = await self._write_handler.execute({
+            "path": path,
+            "content": content,
+            "mode": mode,
+            "encoding": encoding
+        })
+        return result
+    
+    async def edit_file(self, path: str, find: str, replace: str, count: int = 1) -> str:
+        """Edit file contents."""
+        result = await self._edit_handler.execute({
+            "path": path,
+            "find": find,
+            "replace": replace,
+            "count": count
+        })
+        return result
+    
+    async def list_files(self, path: str = ".", recursive: bool = False, include_hidden: bool = False) -> str:
+        """List directory contents."""
+        result = await self._list_handler.execute({
+            "path": path,
+            "recursive": recursive,
+            "include_hidden": include_hidden
+        })
+        return result
