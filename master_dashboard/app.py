@@ -3,11 +3,16 @@ Master Dashboard - Main entry point for RefactorBot.
 
 Streamlit-based unified dashboard for all slices.
 """
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import streamlit as st
 import pandas as pd
 import json
 import asyncio
-from pathlib import Path
 
 # Page configuration
 st.set_page_config(
@@ -226,16 +231,22 @@ def render_control_panel_page():
     # Initialize MasterCore
     if "master_core" not in st.session_state:
         try:
+            from dotenv import load_dotenv
+            load_dotenv()  # Load .env file
+            import os
             from master_core.master_core import MasterCore
-            st.session_state.master_core = MasterCore(
-                openrouter_api_key=st.session_state.get("openrouter_api_key", None)
-            )
+            api_key = os.environ.get("OPENROUTER_API_KEY")
+            st.session_state.master_core = MasterCore(openrouter_api_key=api_key)
             asyncio.run(st.session_state.master_core.initialize())
         except Exception as e:
             st.error(f"Failed to initialize MasterCore: {e}")
             st.session_state.master_core = None
     
     master_core = st.session_state.get("master_core")
+    
+    if not master_core:
+        st.error("MasterCore not initialized. Check .env file for OPENROUTER_API_KEY.")
+        return
     
     slices = [
         ("Agent Core", "slice_agent", "🤖"),
@@ -548,6 +559,8 @@ def render_master_chat_page():
     if "master_chat" not in st.session_state:
         from refactorbot.master_core.master_chat import MasterSwarmChat
         import os
+        from dotenv import load_dotenv
+        load_dotenv()  # Load .env file
         api_key = os.environ.get("OPENROUTER_API_KEY")
         st.session_state.master_chat = MasterSwarmChat(api_key=api_key)
         st.session_state.messages = []

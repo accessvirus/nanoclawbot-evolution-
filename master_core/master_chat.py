@@ -179,10 +179,16 @@ User: "What do I have stored?"
     
     def initialize(self) -> None:
         """Initialize the OpenRouter gateway."""
+        from refactorbot.providers.openrouter_gateway import create_gateway
+        import asyncio
+        
         if self.api_key:
-            import asyncio
-            self.gateway = asyncio.run(OpenRouterGateway.create(self.api_key))
-            logger.info("Master Swarm Chat initialized with OpenRouter")
+            try:
+                self.gateway = asyncio.run(create_gateway(self.api_key))
+                logger.info("Master Swarm Chat initialized with OpenRouter")
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenRouter gateway: {e}")
+                self.gateway = None
     
     def get_slice_descriptions(self) -> str:
         """Get formatted slice descriptions for the AI."""

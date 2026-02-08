@@ -20,7 +20,7 @@ class MemoryStorageServices:
     
     def __init__(self, slice: AtomicSlice):
         self.slice = slice
-        self.db = getattr(slice, 'db', None)
+        self.db = getattr(slice, '_database', None) or getattr(slice, 'database', None)
     
     async def store_memory(
         self,

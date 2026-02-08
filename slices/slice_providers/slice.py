@@ -3,14 +3,47 @@ Providers Slice - Vertical Slice for Provider Management
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional
 
-from ..slice_base import AtomicSlice, SliceConfig, SliceRequest, SliceResponse, SelfImprovementServices
+from ..slice_base import AtomicSlice, SliceConfig, SliceDatabase, SliceRequest, SliceResponse, SelfImprovementServices
 
 logger = logging.getLogger(__name__)
 
 
+class ProvidersDatabase(SliceDatabase):
+    """Database manager for providers slice."""
+    
+    def __init__(self, db_path: str):
+        super().__init__(db_path)
+    
+    async def initialize(self) -> None:
+        """Initialize providers database schema."""
+        await self.connect()
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS providers (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT UNIQUE NOT NULL,
+                config TEXT DEFAULT '{}',
+                credentials TEXT DEFAULT '{}',
+                api_key TEXT,
+                base_url TEXT,
+                model TEXT,
+                status TEXT DEFAULT 'active',
+                priority INTEGER DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT
+            )
+        """)
+        await self._connection.execute("""CREATE INDEX IF NOT EXISTS idx_providers_type ON providers(type)""")
+        await self._connection.execute("""CREATE INDEX IF NOT EXISTS idx_providers_status ON providers(status)""")
+        await self._connection.commit()
+
+
 class SliceProviders(AtomicSlice):
+    """Providers slice for managing LLM providers."""
+    
     @property
     def slice_id(self) -> str:
         return "slice_providers"
@@ -27,6 +60,10 @@ class SliceProviders(AtomicSlice):
         self._config = config or SliceConfig(slice_id="slice_providers")
         self._services: Optional[Any] = None
         self._current_request_id: str = ""
+        # Initialize database
+        data_dir = Path("data")
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self._database = ProvidersDatabase(str(data_dir / "providers.db"))
     
     @property
     def config(self) -> SliceConfig:

@@ -30,8 +30,8 @@ class ToolServices:
     
     def __init__(self, slice: "AtomicSlice"):
         self.slice = slice
-        self.context = slice.context
-        self.db = slice.database
+        # Get database from slice
+        self.db = getattr(slice, '_database', None) or getattr(slice, 'database', None)
     
     async def register_tool(
         self,
@@ -150,13 +150,73 @@ class ToolServices:
     def _import_handler(self, handler_path: str):
         """Import handler module."""
         try:
+            if not handler_path:
+                logger.error("Handler path is empty")
+                return None
+            
+            # Handle special cases for built-in handlers
+            if handler_path.startswith("builtin:"):
+                handler_name = handler_path[8:]
+                return self._get_builtin_handler(handler_name)
+            
+            # Handle import paths
             parts = handler_path.rsplit(".", 1)
             if len(parts) == 2:
-                module = __import__(parts[0], fromlist=[parts[1]])
-                return getattr(module, parts[1])()
-        except Exception as e:
+                module_path, attr_name = parts
+                module = __import__(module_path, fromlist=[attr_name])
+                return getattr(module, attr_name)()
+            else:
+                # Try direct import
+                module = __import__(handler_path)
+                return module
+                
+        except ImportError as e:
             logger.error(f"Error importing handler {handler_path}: {e}")
-        return None
+            return None
+        except AttributeError as e:
+            logger.error(f"Handler attribute not found {handler_path}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error importing handler {handler_path}: {e}")
+            return None
+    
+    def _get_builtin_handler(self, handler_name: str):
+        """Get a built-in handler by name."""
+        try:
+            from .handlers import (
+                ReadFileTool,
+                WriteFileTool,
+                EditFileTool,
+                ListDirTool,
+                ExecTool,
+                WebSearchTool,
+                WebFetchTool
+            )
+            
+            handler_map = {
+                'read_file': ReadFileTool(),
+                'write_file': WriteFileTool(),
+                'edit_file': EditFileTool(),
+                'list_dir': ListDirTool(),
+                'exec': ExecTool(),
+                'web_search': WebSearchTool(),
+                'web_fetch': WebFetchTool(),
+            }
+            
+            handler = handler_map.get(handler_name.lower())
+            if handler:
+                logger.info(f"Built-in handler loaded: {handler_name}")
+                return handler
+            else:
+                logger.error(f"Unknown built-in handler: {handler_name}")
+                return None
+                
+        except ImportError as e:
+            logger.error(f"Error importing handlers module: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error getting built-in handler: {e}")
+            return None
     
     async def _log_execution(
         self,

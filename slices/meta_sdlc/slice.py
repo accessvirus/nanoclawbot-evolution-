@@ -138,8 +138,9 @@ class MetaSDLCEngine:
     
     def __init__(self, slice_instance: "AtomicSlice"):
         self.slice = slice_instance
-        self.slice_name = slice_instance.name
-        self.slice_path = Path(slice_instance.config_path).parent
+        self.slice_id = slice_instance.slice_id
+        self.slice_name = slice_instance.slice_name
+        self.slice_path = Path(slice_instance.config_path).parent if hasattr(slice_instance, 'config_path') else Path(".")
         
         # Analysis cache
         self._last_analysis: Optional[AnalysisResult] = None

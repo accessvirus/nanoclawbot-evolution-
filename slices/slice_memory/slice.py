@@ -5,12 +5,16 @@ This slice handles memory storage and retrieval.
 """
 
 import logging
-from typing import Any, Dict, Optional
+import os
+from pathlib import Path
+from typing import Any, Optional
 
 from ..slice_base import (
-    AtomicSlice, 
-    SliceConfig, 
-    SliceRequest, 
+    AtomicSlice,
+    BaseSlice,
+    SliceConfig,
+    SliceDatabase,
+    SliceRequest,
     SliceResponse,
     SelfImprovementServices
 )
@@ -18,7 +22,36 @@ from ..slice_base import (
 logger = logging.getLogger(__name__)
 
 
-class SliceMemory(AtomicSlice):
+class MemoryDatabase(SliceDatabase):
+    """Database manager for memory slice."""
+    
+    def __init__(self, db_path: str):
+        super().__init__(db_path)
+    
+    async def initialize(self) -> None:
+        """Initialize memory database schema."""
+        await self.connect()
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS memories (
+                id TEXT PRIMARY KEY,
+                key TEXT UNIQUE NOT NULL,
+                value TEXT NOT NULL,
+                metadata TEXT DEFAULT '{}',
+                category TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+        """)
+        await self._connection.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_key ON memories(key)
+        """)
+        await self._connection.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category)
+        """)
+        await self._connection.commit()
+
+
+class SliceMemory(BaseSlice):
     """
     Memory slice for persistent memory storage.
     
@@ -41,9 +74,13 @@ class SliceMemory(AtomicSlice):
         return "1.0.0"
     
     def __init__(self, config: Optional[SliceConfig] = None):
-        self._config = config or SliceConfig(slice_id="slice_memory")
+        super().__init__(config)
         self._services: Optional[Any] = None
         self._current_request_id: str = ""
+        # Initialize database
+        data_dir = Path("data")
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self._database = MemoryDatabase(str(data_dir / "memory.db"))
     
     @property
     def config(self) -> SliceConfig:

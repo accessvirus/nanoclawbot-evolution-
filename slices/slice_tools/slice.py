@@ -5,13 +5,16 @@ This slice handles tool registration and execution.
 """
 
 import logging
-from typing import Any, Dict, Optional
+import os
+from pathlib import Path
+from typing import Any, Optional
 
 from ..slice_base import (
-    AtomicSlice, 
-    SliceConfig, 
-    SliceContext, 
-    SliceRequest, 
+    AtomicSlice,
+    BaseSlice,
+    SliceConfig,
+    SliceDatabase,
+    SliceRequest,
     SliceResponse,
     SelfImprovementServices
 )
@@ -19,7 +22,46 @@ from ..slice_base import (
 logger = logging.getLogger(__name__)
 
 
-class SliceTools(AtomicSlice):
+class ToolsDatabase(SliceDatabase):
+    """Database manager for tools slice."""
+    
+    def __init__(self, db_path: str):
+        super().__init__(db_path)
+    
+    async def initialize(self) -> None:
+        """Initialize tools database schema."""
+        await self.connect()
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS tools (
+                id TEXT PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                parameters TEXT DEFAULT '{}',
+                handler TEXT,
+                category TEXT,
+                enabled BOOLEAN DEFAULT 1,
+                version TEXT DEFAULT '1.0.0',
+                created_at TEXT,
+                updated_at TEXT
+            )
+        """)
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS tool_executions (
+                id TEXT PRIMARY KEY,
+                tool_id TEXT NOT NULL,
+                arguments TEXT DEFAULT '{}',
+                output TEXT,
+                success BOOLEAN DEFAULT 0,
+                execution_time REAL DEFAULT 0,
+                created_at TEXT,
+                FOREIGN KEY (tool_id) REFERENCES tools(id)
+            )
+        """)
+        await self._connection.execute("""CREATE INDEX IF NOT EXISTS idx_tool_executions_tool ON tool_executions(tool_id)""")
+        await self._connection.commit()
+
+
+class SliceTools(BaseSlice):
     """
     Tools slice for managing agent tools.
     
@@ -43,9 +85,13 @@ class SliceTools(AtomicSlice):
         return "1.0.0"
     
     def __init__(self, config: Optional[SliceConfig] = None):
-        self._config = config or SliceConfig(slice_id="slice_tools")
+        super().__init__(config)
         self._services: Optional[Any] = None
         self._current_request_id: str = ""
+        # Initialize database
+        data_dir = Path("data")
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self._database = ToolsDatabase(str(data_dir / "tools.db"))
     
     @property
     def config(self) -> SliceConfig:

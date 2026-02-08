@@ -117,7 +117,7 @@ class SliceDatabase:
     
     async def initialize(self) -> None:
         """Initialize database schema"""
-        raise NotImplementedError()
+        raise NotImplementedError("Subclasses must implement initialize()")
     
     async def execute(
         self,
@@ -149,6 +149,15 @@ class SliceDatabase:
             await self.connect()
         async with self._connection:
             yield
+    
+    async def __aenter__(self) -> "SliceDatabase":
+        """Async context manager entry"""
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit"""
+        await self.disconnect()
 
 
 # =============================================================================
@@ -386,7 +395,7 @@ class BaseSlice:
     
     @property
     def slice_version(self) -> str:
-        return self._version
+        return self.__class__.slice_version
     
     @property
     def status(self) -> SliceStatus:
