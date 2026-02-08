@@ -13,7 +13,7 @@ dependencies = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "aiosqlite>=0.19.0",
-    "uuid>=1.30",
+    # Note: uuid is a Python built-in module, no pip package needed
 ]
 
 [project.optional-dependencies]

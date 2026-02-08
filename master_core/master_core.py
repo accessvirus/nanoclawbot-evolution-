@@ -103,15 +103,11 @@ class MasterCore:
         return {
             "status": "healthy",
             "orchestrator": self.orchestrator_id,
-            "slices": list(self._slices.keys())
+            "slices": list(self._slices.keys()),
+            "running": self._running,
+            "total_requests": self._total_requests,
+            "total_errors": self._total_errors
         }
-        self._running = False
-        self._start_time: Optional[datetime] = None
-        
-        # Performance metrics
-        self._total_requests = 0
-        self._total_errors = 0
-        self._total_latency_ms = 0.0
     
     # -------------------------------------------------------------------------
     # Slice Registration

@@ -6,6 +6,7 @@ Streamlit-based unified dashboard for all slices.
 import streamlit as st
 import pandas as pd
 import json
+import asyncio
 from pathlib import Path
 
 # Page configuration
@@ -73,7 +74,7 @@ def render_sidebar():
         st.markdown("### 🧭 Navigation")
         page = st.radio(
             "Go to",
-            ["Overview", "Control Panel", "Analytics", "Logs", "Settings"]
+            ["Overview", "Control Panel", "Analytics", "Logs", "Settings", "🧠 Master Swarm Chat"]
         )
         
         st.markdown("---")
@@ -435,6 +436,172 @@ def render_settings_page():
             st.info("Not implemented in demo.")
 
 
+def render_master_chat_page():
+    """Render the Master Swarm Chat page"""
+    import json
+    from datetime import datetime
+    
+    # Initialize master chat
+    if "master_chat" not in st.session_state:
+        from refactorbot.master_core.master_chat import MasterSwarmChat
+        import os
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        st.session_state.master_chat = MasterSwarmChat(api_key=api_key)
+        st.session_state.messages = []
+        st.session_state.actions = []
+    
+    st.title("🧠 Master Swarm Chat")
+    st.markdown("Chat with the AI swarm orchestrator. I'm aware of all slices and can coordinate them.")
+    
+    # Quick commands
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("📋 List All Agents"):
+            st.session_state.messages.append({
+                "role": "user",
+                "content": "List all agents",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+    
+    with col2:
+        if st.button("🧠 Show My Memories"):
+            st.session_state.messages.append({
+                "role": "user",
+                "content": "What do I have stored?",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+    
+    with col3:
+        if st.button("🤖 Create New Agent"):
+            st.session_state.messages.append({
+                "role": "user",
+                "content": "Create a new agent named TestAgent",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+    
+    with col4:
+        if st.button("🔧 Register a Tool"):
+            st.session_state.messages.append({
+                "role": "user",
+                "content": "Register a tool called calculator",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+    
+    st.markdown("---")
+    
+    # Chat status
+    chat_status = st.session_state.master_chat.get_status()
+    st.markdown("### 📊 Chat Status")
+    st.metric("Initialized", "✓" if chat_status["initialized"] else "✗")
+    st.metric("Model", chat_status.get("model", "N/A"))
+    st.metric("History", chat_status["history_length"])
+    
+    st.markdown("---")
+    
+    # Chat interface
+    st.subheader("💬 Chat")
+    
+    # Chat messages
+    for i, message in enumerate(st.session_state.messages):
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if "timestamp" in message:
+                st.caption(f"{message['timestamp']}")
+            
+            # Show associated actions
+            if i < len(st.session_state.actions) and st.session_state.actions[i]:
+                with st.expander("🔧 Dispatched Actions"):
+                    for action in st.session_state.actions[i]:
+                        st.json(action)
+    
+    # Chat input
+    if prompt := st.chat_input("Ask me to coordinate the swarm..."):
+        # Add user message
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Generate response
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            
+            # Get AI response
+            result = st.session_state.master_chat.chat(prompt)
+            response = result["response"]
+            actions = result["actions"]
+            
+            # Display response
+            message_placeholder.markdown(response)
+            
+            # Show actions
+            if actions:
+                with st.expander("🔧 Dispatched Actions", expanded=True):
+                    for action in actions:
+                        st.json(action)
+            
+            # Store actions
+            st.session_state.actions.append(actions)
+            
+            st.caption(f"Model: {st.session_state.master_chat.model} | {result['timestamp']}")
+    
+    st.markdown("---")
+    
+    # Direct slice control
+    st.subheader("🎛️ Direct Slice Control")
+    
+    col_a, col_b = st.columns([1, 2])
+    
+    with col_a:
+        slice_id = st.selectbox(
+            "Select Slice",
+            ["slice_agent", "slice_tools", "slice_memory", 
+             "slice_communication", "slice_session", "slice_providers",
+             "slice_skills", "slice_eventbus"]
+        )
+        
+        # Get slice info
+        slice_info = None
+        for info in st.session_state.master_chat.slice_info.values():
+            if info.slice_id == slice_id:
+                slice_info = info
+                break
+        
+        if slice_info:
+            st.markdown(f"**{slice_info.name}**")
+            st.markdown(slice_info.description)
+            st.markdown("**Operations:**")
+            for op in slice_info.operations:
+                st.code(op)
+    
+    with col_b:
+        if slice_info:
+            operation = st.selectbox("Operation", slice_info.operations)
+            
+            st.markdown("**Payload:**")
+            payload_json = st.text_area("JSON Payload", value="{}", height=100)
+            
+            try:
+                payload = json.loads(payload_json)
+            except:
+                payload = {}
+                st.error("Invalid JSON")
+            
+            if st.button("🚀 Execute", use_container_width=True):
+                st.info("Configure OPENROUTER_API_KEY for full execution")
+                st.json({"slice": slice_id, "operation": operation, "payload": payload, "status": "pending"})
+    
+    # Implementation info
+    with st.expander("ℹ️ Implementation Info"):
+        st.markdown(st.session_state.master_chat.get_implementation_summary())
+
+
 def render():
     """Main render function"""
     page = render_sidebar()
@@ -449,6 +616,8 @@ def render():
         render_logs_page()
     elif page == "Settings":
         render_settings_page()
+    elif page == "🧠 Master Swarm Chat":
+        render_master_chat_page()
 
 
 if __name__ == "__main__":

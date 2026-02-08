@@ -14,8 +14,8 @@ from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
 import pytest
 import pytest_asyncio
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
+# Add project root to path - add parent of refactorbot to make 'refactorbot' a package
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 

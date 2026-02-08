@@ -25,15 +25,40 @@ class SliceSkills(AtomicSlice):
     
     def __init__(self, config: Optional[SliceConfig] = None):
         self._config = config or SliceConfig(slice_id="slice_skills")
-        self._services: Optional[Any] = None
+        self._registration_service: Optional[Any] = None
+        self._query_service: Optional[Any] = None
+        self._management_service: Optional[Any] = None
+        self._execution_service: Optional[Any] = None
         self._current_request_id: str = ""
+        self._initialized: bool = False
     
     @property
     def config(self) -> SliceConfig:
         return self._config
     
+    async def initialize(self) -> None:
+        """Initialize the slice and its services."""
+        if self._initialized:
+            return
+        from .core.services import (
+            SkillRegistrationServices,
+            SkillQueryServices,
+            SkillManagementServices,
+            SkillExecutionServices
+        )
+        self._registration_service = SkillRegistrationServices(self)
+        self._query_service = SkillQueryServices(self)
+        self._management_service = SkillManagementServices(self)
+        self._execution_service = SkillExecutionServices(self)
+        await self._registration_service.initialize()
+        await self._execution_service.initialize()
+        self._initialized = True
+        logger.info("Skills slice initialized")
+    
     async def execute(self, request: SliceRequest) -> SliceResponse:
         """Public execute method for slice."""
+        if not self._initialized:
+            await self.initialize()
         return await self._execute_core(request)
     
     async def _execute_core(self, request: SliceRequest) -> SliceResponse:
@@ -57,10 +82,7 @@ class SliceSkills(AtomicSlice):
     
     async def _register_skill(self, payload: Dict[str, Any]) -> SliceResponse:
         try:
-            from .core.services import SkillRegistrationServices
-            if self._services is None:
-                self._services = SkillRegistrationServices(self)
-            skill_id = await self._services.register_skill(
+            skill_id = await self._registration_service.register_skill(
                 name=payload.get("name", ""),
                 description=payload.get("description", ""),
                 parameters=payload.get("parameters", {})
@@ -72,10 +94,7 @@ class SliceSkills(AtomicSlice):
     
     async def _get_skill(self, payload: Dict[str, Any]) -> SliceResponse:
         try:
-            from .core.services import SkillQueryServices
-            if self._services is None:
-                self._services = SkillQueryServices(self)
-            skill = await self._services.get_skill(skill_id=payload.get("skill_id", ""))
+            skill = await self._registration_service.get_skill(skill_id=payload.get("skill_id", ""))
             return SliceResponse(request_id=self._current_request_id, success=True, payload=skill or {})
         except Exception as e:
             logger.error(f"Failed to get skill: {e}")
@@ -83,10 +102,7 @@ class SliceSkills(AtomicSlice):
     
     async def _list_skills(self, payload: Dict[str, Any]) -> SliceResponse:
         try:
-            from .core.services import SkillQueryServices
-            if self._services is None:
-                self._services = SkillQueryServices(self)
-            skills = await self._services.list_skills(category=payload.get("category"))
+            skills = await self._query_service.list_skills(category=payload.get("category"))
             return SliceResponse(request_id=self._current_request_id, success=True, payload={"skills": skills})
         except Exception as e:
             logger.error(f"Failed to list skills: {e}")
@@ -94,10 +110,7 @@ class SliceSkills(AtomicSlice):
     
     async def _update_skill(self, payload: Dict[str, Any]) -> SliceResponse:
         try:
-            from .core.services import SkillManagementServices
-            if self._services is None:
-                self._services = SkillManagementServices(self)
-            success = await self._services.update_skill(
+            success = await self._management_service.update_skill(
                 skill_id=payload.get("skill_id", ""),
                 data=payload.get("data", {})
             )
@@ -108,10 +121,7 @@ class SliceSkills(AtomicSlice):
     
     async def _delete_skill(self, payload: Dict[str, Any]) -> SliceResponse:
         try:
-            from .core.services import SkillManagementServices
-            if self._services is None:
-                self._services = SkillManagementServices(self)
-            success = await self._services.delete_skill(skill_id=payload.get("skill_id", ""))
+            success = await self._management_service.delete_skill(skill_id=payload.get("skill_id", ""))
             return SliceResponse(request_id=self._current_request_id, success=success, payload={"deleted": success})
         except Exception as e:
             logger.error(f"Failed to delete skill: {e}")
@@ -119,10 +129,7 @@ class SliceSkills(AtomicSlice):
     
     async def _execute_skill(self, payload: Dict[str, Any]) -> SliceResponse:
         try:
-            from .core.services import SkillExecutionServices
-            if self._services is None:
-                self._services = SkillExecutionServices(self)
-            result = await self._services.execute_skill(
+            result = await self._execution_service.execute_skill(
                 skill_id=payload.get("skill_id", ""),
                 parameters=payload.get("parameters", {})
             )
