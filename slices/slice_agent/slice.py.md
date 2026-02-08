@@ -62,18 +62,33 @@ async def _execute_core(self, request: SliceRequest) -> SliceResponse:
 
 ---
 
-## Minor Issues
+## Critical Improvements
 
-1. Health check missing `version` field
-2. No `run_self_diagnostics()` implementation
+### 1. Add Agent Metrics Collection
+- Track agent execution times
+- Track success/failure rates
+- Add latency histograms
+- Track token usage per agent
 
----
+### 2. Add Agent Pool Management
+- Implement agent pooling for concurrent requests
+- Add agent lifecycle management
+- Implement agent warm-up strategies
 
-## Recommendations
+### 3. Add Context Caching
+- Cache frequently used contexts
+- Implement context compression
+- Add context eviction policies
 
-1. Complete health_check() implementation
-2. Add run_self_diagnostics()
-3. Consider adding agent-specific metrics
+### 4. Add Request Rate Limiting
+- Implement per-agent rate limits
+- Add request queuing
+- Add backpressure handling
+
+### 5. Add Agent State Persistence
+- Persist agent state to database
+- Implement state recovery
+- Add state versioning
 
 ---
 
